@@ -28,6 +28,7 @@
 #include "openzl/codecs/prefix/decode_prefix_binding.h"
 #include "openzl/codecs/quantize/decode_quantize_binding.h"
 #include "openzl/codecs/range_pack/decode_range_pack_binding.h"
+#include "openzl/codecs/cat_pack/decode_cat_pack_binding.h"
 #include "openzl/codecs/rolz/decode_rolz_binding.h"
 #include "openzl/codecs/sentinel/decode_sentinel_binding.h"
 #include "openzl/codecs/splitByStruct/decode_splitByStruct_binding.h"

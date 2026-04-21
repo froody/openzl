@@ -259,6 +259,8 @@ typedef enum {
     ZL_StandardTransformID_float_deconstruct = 33,
     ZL_StandardTransformID_bitunpack         = 34,
     ZL_StandardTransformID_range_pack        = 35,
+    ZL_StandardTransformID_cat_pack = 65,
+
 
     ZL_StandardTransformID_tokenize_fixed   = 36,
     ZL_StandardTransformID_tokenize_numeric = 37,

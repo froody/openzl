@@ -198,6 +198,7 @@ typedef enum {
     ZL_PrivateStandardGraphID_delta_field_lz,
     ZL_PrivateStandardGraphID_range_pack,
     ZL_PrivateStandardGraphID_range_pack_zstd,
+
     ZL_PrivateStandardGraphID_tokenize_delta_field_lz,
 
     ZL_PrivateStandardGraphID_split_serial,
@@ -214,6 +215,8 @@ typedef enum {
     ZL_PrivateStandardGraphID_interpret_num16_compress,
     ZL_PrivateStandardGraphID_interpret_num32_compress,
     ZL_PrivateStandardGraphID_interpret_num64_compress,
+
+    ZL_PrivateStandardGraphID_cat_pack,
 
     ZL_PrivateStandardGraphID_end // last id, used to detect out-of-bound enum
                                   // values
@@ -283,6 +286,12 @@ typedef enum {
     (ZL_GraphID)              \
     {                          \
         ZL_PrivateStandardGraphID_range_pack \
+    }
+
+#define ZL_GRAPH_CAT_PACK   \
+    (ZL_GraphID)              \
+    {                          \
+        ZL_PrivateStandardGraphID_cat_pack \
     }
 
 #define ZL_GRAPH_SPLIT_SERIAL (ZL_GraphID){ZL_PrivateStandardGraphID_split_serial}

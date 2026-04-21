@@ -191,6 +191,8 @@ const InternalGraphDesc GR_standardGraphs[ZL_PrivateStandardGraphID_end] = {
     REGISTER_STATIC_GRAPH(ZL_PrivateStandardGraphID_delta_field_lz, "!zl.private.delta_field_lz", ZL_Type_numeric, ZL_StandardNodeID_delta_int, _1_SUCCESSOR(ZL_StandardGraphID_field_lz) ),
     REGISTER_STATIC_GRAPH(ZL_PrivateStandardGraphID_range_pack, "!zl.private.range_pack", ZL_Type_numeric, ZL_StandardNodeID_range_pack, _1_SUCCESSOR(ZL_StandardGraphID_field_lz) ),
     REGISTER_STATIC_GRAPH(ZL_PrivateStandardGraphID_range_pack_zstd, "!zl.private.range_pack_zstd", ZL_Type_numeric, ZL_StandardNodeID_range_pack, _1_SUCCESSOR(ZL_StandardGraphID_zstd) ),
+    REGISTER_STATIC_GRAPH(ZL_PrivateStandardGraphID_cat_pack, "!zl.private.cat_pack", ZL_Type_numeric, ZL_StandardNodeID_cat_pack, _1_SUCCESSOR(ZL_StandardGraphID_field_lz) ),
+
     REGISTER_STATIC_GRAPH(ZL_PrivateStandardGraphID_tokenize_delta_field_lz, "!zl.private.tokenize_delta_field_lz", ZL_Type_numeric, ZL_PrivateStandardNodeID_tokenize_sorted, _2_SUCCESSORS(ZL_PrivateStandardGraphID_delta_field_lz, ZL_StandardGraphID_field_lz) ),
 
     REGISTER_DYNAMIC_GRAPH(ZL_PrivateStandardGraphID_split_serial, "!zl.private.split_serial", ZL_Type_serial, ZL_splitFnGraph),
