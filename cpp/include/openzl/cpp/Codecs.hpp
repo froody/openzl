@@ -27,7 +27,6 @@
 #include "openzl/cpp/codecs/Prefix.hpp"           // IWYU pragma: export
 #include "openzl/cpp/codecs/Quantize.hpp"         // IWYU pragma: export
 #include "openzl/cpp/codecs/RangePack.hpp"        // IWYU pragma: export
-#include "openzl/cpp/codecs/CatPack.hpp"        // IWYU pragma: export
 #include "openzl/cpp/codecs/SDDL.hpp"             // IWYU pragma: export
 #include "openzl/cpp/codecs/SDDL2.hpp"            // IWYU pragma: export
 #include "openzl/cpp/codecs/Sentinel.hpp"         // IWYU pragma: export

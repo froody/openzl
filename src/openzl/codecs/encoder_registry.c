@@ -8,6 +8,7 @@
 #include "openzl/codecs/bitSplit/encode_bitsplit_top8_binding.h"
 #include "openzl/codecs/bitpack/encode_bitpack_binding.h"
 #include "openzl/codecs/bitunpack/encode_bitunpack_binding.h"
+#include "openzl/codecs/cat_pack/encode_cat_pack_binding.h"
 #include "openzl/codecs/concat/encode_concat_binding.h"
 #include "openzl/codecs/constant/encode_constant_binding.h"
 #include "openzl/codecs/conversion/encode_conversion_binding.h"
@@ -28,7 +29,6 @@
 #include "openzl/codecs/prefix/encode_prefix_binding.h"
 #include "openzl/codecs/quantize/encode_quantize_binding.h"
 #include "openzl/codecs/range_pack/encode_range_pack_binding.h"
-#include "openzl/codecs/cat_pack/encode_cat_pack_binding.h"
 #include "openzl/codecs/rolz/encode_rolz_binding.h"
 #include "openzl/codecs/sentinel/encode_sentinel_binding.h"
 #include "openzl/codecs/splitByStruct/encode_splitByStruct_binding.h"
@@ -98,7 +98,7 @@ const CNode ER_standardNodes[STANDARD_ENCODERS_NB] = {
 
     REGISTER_TRANSFORM(ZL_StandardNodeID_bitunpack, ZL_StandardTransformID_bitunpack, 6, EI_BITUNPACK),
     REGISTER_TRANSFORM(ZL_StandardNodeID_range_pack, ZL_StandardTransformID_range_pack, 8, EI_RANGE_PACK),
-    REGISTER_TRANSFORM(ZL_StandardNodeID_cat_pack, ZL_StandardTransformID_cat_pack, 24, EI_CAT_PACK),
+    REGISTER_TRANSFORM(ZL_PrivateStandardNodeID_cat_pack, ZL_StandardTransformID_cat_pack, 24, EI_CAT_PACK),
 
     REGISTER_TRANSFORM(ZL_StandardNodeID_merge_sorted, ZL_StandardTransformID_merge_sorted, 9, EI_MERGE_SORTED),
     REGISTER_TRANSFORM(ZL_StandardNodeID_prefix, ZL_StandardTransformID_prefix, 11, EI_PREFIX),

@@ -5,6 +5,7 @@
 #include "openzl/codecs/bitSplit/decode_bitSplit_binding.h"
 #include "openzl/codecs/bitpack/decode_bitpack_binding.h"
 #include "openzl/codecs/bitunpack/decode_bitunpack_binding.h"
+#include "openzl/codecs/cat_pack/decode_cat_pack_binding.h"
 #include "openzl/codecs/concat/decode_concat_binding.h"
 #include "openzl/codecs/constant/decode_constant_binding.h"
 #include "openzl/codecs/conversion/decode_conversion_binding.h"
@@ -28,7 +29,6 @@
 #include "openzl/codecs/prefix/decode_prefix_binding.h"
 #include "openzl/codecs/quantize/decode_quantize_binding.h"
 #include "openzl/codecs/range_pack/decode_range_pack_binding.h"
-#include "openzl/codecs/cat_pack/decode_cat_pack_binding.h"
 #include "openzl/codecs/rolz/decode_rolz_binding.h"
 #include "openzl/codecs/sentinel/decode_sentinel_binding.h"
 #include "openzl/codecs/splitByStruct/decode_splitByStruct_binding.h"
@@ -121,6 +121,7 @@ const StandardDTransform SDecoders_array[ZL_StandardTransformID_end] = {
     REGISTER_TTRANSFORM(ZL_StandardTransformID_float_deconstruct, 4, FLOAT_DECONSTRUCT),
     REGISTER_TTRANSFORM(ZL_StandardTransformID_bitunpack, 6, BITUNPACK),
     REGISTER_TTRANSFORM(ZL_StandardTransformID_range_pack, 8, RANGE_PACK),
+    REGISTER_TTRANSFORM(ZL_StandardTransformID_cat_pack, 24, CAT_PACK),
     REGISTER_TTRANSFORM(ZL_StandardTransformID_tokenize_fixed, 8, TOKENIZE_FIXED),
     REGISTER_TTRANSFORM(ZL_StandardTransformID_tokenize_numeric, 8, TOKENIZE_NUMERIC),
     REGISTER_TTRANSFORM(ZL_StandardTransformID_tokenize_string, 11, TOKENIZE_VSF),
