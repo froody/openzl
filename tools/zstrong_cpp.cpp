@@ -293,35 +293,34 @@ class ThriftTransform : public StandardFnTransform {
    public:
     explicit ThriftTransform(bool compact)
             : StandardFnTransform(
-                      [compact](auto& cgraph, auto successors, auto params) {
-                          ZL_NodeID node;
-                          if (compact) {
-                              node = registerCompactTransform(
-                                      &cgraph,
-                                      thrift::kThriftCompactConfigurable);
-                          } else {
-                              node = registerBinaryTransform(
-                                      &cgraph,
-                                      thrift::kThriftBinaryConfigurable);
-                          }
-                          const ZL_ParameterizedNodeDesc desc = {
-                              .node        = node,
-                              .localParams = &params,
-                          };
-                          node = ZL_Compressor_registerParameterizedNode(
-                                  &cgraph, &desc);
-                          return ZL_Compressor_registerStaticGraph_fromNode(
-                                  &cgraph,
-                                  node,
-                                  successors.data(),
-                                  successors.size());
-                      },
-                      { ZL_Type_serial },
-                      thriftOutTypes(compact),
-                      "Thrift parser",
-                      {},
-                      {},
-                      { ParamInfo{ 0, "config", "Thrift parser config" } }),
+                    [compact](auto& cgraph, auto successors, auto params) {
+                        ZL_NodeID node;
+                        if (compact) {
+                            node = registerCompactTransform(
+                                    &cgraph,
+                                    thrift::kThriftCompactConfigurable);
+                        } else {
+                            node = registerBinaryTransform(
+                                    &cgraph, thrift::kThriftBinaryConfigurable);
+                        }
+                        const ZL_ParameterizedNodeDesc desc = {
+                            .node        = node,
+                            .localParams = &params,
+                        };
+                        node = ZL_Compressor_registerParameterizedNode(
+                                &cgraph, &desc);
+                        return ZL_Compressor_registerStaticGraph_fromNode(
+                                &cgraph,
+                                node,
+                                successors.data(),
+                                successors.size());
+                    },
+                    { ZL_Type_serial },
+                    thriftOutTypes(compact),
+                    "Thrift parser",
+                    {},
+                    {},
+                    { ParamInfo{ 0, "config", "Thrift parser config" } }),
               compact_(compact)
     {
     }
@@ -866,10 +865,11 @@ GraphMap const& getStandardGraphs()
                 "store",
                 std::make_unique<StandardGraph>(
                         ZL_GRAPH_STORE, "Stores the input stream as-is."));
-        graphs.emplace(
-                "constant",
-                std::make_unique<StandardGraph>(
-                        ZL_GRAPH_CONSTANT, "Constant encoding."));
+        // Disabled `constant` to prevent overfitting on homogeneous samples.
+        // graphs.emplace(
+        //         "constant",
+        //         std::make_unique<StandardGraph>(
+        //                 ZL_GRAPH_CONSTANT, "Constant encoding."));
         graphs.emplace(
                 "fse",
                 std::make_unique<StandardGraph>(
@@ -1253,12 +1253,10 @@ std::vector<std::string> decompressMulti(
     DCtx dctx;
     // TODO(terrelln): Get rid of this hack by properly registering thrift as a
     // custom transform. We don't currently support custom C++ transforms.
-    dctx.unwrap(
-            thrift::registerCompactTransform(
-                    dctx.get(), thrift::kThriftCompactConfigurable));
-    dctx.unwrap(
-            thrift::registerBinaryTransform(
-                    dctx.get(), thrift::kThriftBinaryConfigurable));
+    dctx.unwrap(thrift::registerCompactTransform(
+            dctx.get(), thrift::kThriftCompactConfigurable));
+    dctx.unwrap(thrift::registerBinaryTransform(
+            dctx.get(), thrift::kThriftBinaryConfigurable));
     dctx.unwrap(
             ZS2_DCtx_registerJsonExtract(dctx.get(), kJsonExtractTransformID));
     dctx.unwrap(
