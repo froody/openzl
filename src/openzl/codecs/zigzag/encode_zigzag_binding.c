@@ -4,6 +4,11 @@
 #include "openzl/codecs/zigzag/encode_zigzag_kernel.h" // ZS_zigzagEncodeXX
 #include "openzl/common/assertion.h"
 
+#if OPENZL_HAS_CUDA
+#    include <cuda_runtime.h>
+#    include "openzl/codecs/gpu/encode_zigzag_gpu.h"
+#endif
+
 // ZL_TypedEncoderFn
 ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
 {
@@ -20,6 +25,40 @@ ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
             ZL_Encoder_createTypedStream(eictx, 0, nbInts, numWidth);
     ZL_ERR_IF_NULL(out, allocation);
     ZL_ASSERT(numWidth == 1 || numWidth == 2 || numWidth == 4 || numWidth == 8);
+
+#if OPENZL_HAS_CUDA
+    if (nbInts >= 16384) {
+        void const* src = ZL_Input_ptr(in);
+        void* dst       = ZL_Output_ptr(out);
+        void *d_src = NULL, *d_dst = NULL;
+        size_t const bytes = nbInts * numWidth;
+        if (cudaMalloc(&d_src, bytes) == cudaSuccess &&
+            cudaMalloc(&d_dst, bytes) == cudaSuccess) {
+            cudaMemcpy(d_src, src, bytes, cudaMemcpyHostToDevice);
+            switch (numWidth) {
+                case 1:
+                    ZL_zigzagEncode8_gpu((uint8_t*)d_dst, (int8_t const*)d_src, nbInts, 0);
+                    break;
+                case 2:
+                    ZL_zigzagEncode16_gpu((uint16_t*)d_dst, (int16_t const*)d_src, nbInts, 0);
+                    break;
+                case 4:
+                    ZL_zigzagEncode32_gpu((uint32_t*)d_dst, (int32_t const*)d_src, nbInts, 0);
+                    break;
+                case 8:
+                    ZL_zigzagEncode64_gpu((uint64_t*)d_dst, (int64_t const*)d_src, nbInts, 0);
+                    break;
+            }
+            cudaDeviceSynchronize();
+            cudaMemcpy(dst, d_dst, bytes, cudaMemcpyDeviceToHost);
+            cudaFree(d_src);
+            cudaFree(d_dst);
+            ZL_ERR_IF_ERR(ZL_Output_commit(out, nbInts));
+            return ZL_returnValue(1);
+        }
+    }
+#endif
+
     switch (numWidth) {
         case 1:
             ZL_zigzagEncode8(ZL_Output_ptr(out), ZL_Input_ptr(in), nbInts);

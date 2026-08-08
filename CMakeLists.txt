@@ -154,6 +154,17 @@ if (${ZL_HAVE_X86_64_ASM})
 endif()
 
 if(OPENZL_ENABLE_CUDA)
+    if(NOT CMAKE_CUDA_COMPILER)
+        find_program(OPENZL_NVCC_BIN nvcc
+            HINTS
+                /usr/local/cuda/bin
+                /usr/local/cuda-13.1/bin
+                /usr/local/cuda-13.2/bin
+        )
+        if(OPENZL_NVCC_BIN)
+            set(CMAKE_CUDA_COMPILER "${OPENZL_NVCC_BIN}" CACHE FILEPATH "CUDA Compiler" FORCE)
+        endif()
+    endif()
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
     list(APPEND sources
