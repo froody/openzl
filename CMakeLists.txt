@@ -167,6 +167,8 @@ if(OPENZL_ENABLE_CUDA)
     endif()
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
+    add_compile_definitions(OPENZL_HAS_CUDA=1)
+    include_directories(/usr/local/cuda/include /usr/local/cuda-13.1/include)
     list(APPEND sources
         ${OPENZL_SRC_DIR}/openzl/codecs/gpu/encode_delta_gpu.cu
         ${OPENZL_SRC_DIR}/openzl/codecs/gpu/encode_zigzag_gpu.cu

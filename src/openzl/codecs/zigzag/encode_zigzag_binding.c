@@ -27,30 +27,34 @@ ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
     ZL_ASSERT(numWidth == 1 || numWidth == 2 || numWidth == 4 || numWidth == 8);
 
 #if OPENZL_HAS_CUDA
-    if (nbInts >= 16384) {
+    if (nbInts >= 65536) {
+        static _Thread_local cudaStream_t tls_stream = NULL;
+        if (!tls_stream) {
+            cudaStreamCreateWithFlags(&tls_stream, cudaStreamNonBlocking);
+        }
         void const* src = ZL_Input_ptr(in);
         void* dst       = ZL_Output_ptr(out);
         void *d_src = NULL, *d_dst = NULL;
         size_t const bytes = nbInts * numWidth;
         if (cudaMalloc(&d_src, bytes) == cudaSuccess &&
             cudaMalloc(&d_dst, bytes) == cudaSuccess) {
-            cudaMemcpy(d_src, src, bytes, cudaMemcpyHostToDevice);
+            cudaMemcpyAsync(d_src, src, bytes, cudaMemcpyHostToDevice, tls_stream);
             switch (numWidth) {
                 case 1:
-                    ZL_zigzagEncode8_gpu((uint8_t*)d_dst, (int8_t const*)d_src, nbInts, 0);
+                    ZL_zigzagEncode8_gpu((uint8_t*)d_dst, (int8_t const*)d_src, nbInts, tls_stream);
                     break;
                 case 2:
-                    ZL_zigzagEncode16_gpu((uint16_t*)d_dst, (int16_t const*)d_src, nbInts, 0);
+                    ZL_zigzagEncode16_gpu((uint16_t*)d_dst, (int16_t const*)d_src, nbInts, tls_stream);
                     break;
                 case 4:
-                    ZL_zigzagEncode32_gpu((uint32_t*)d_dst, (int32_t const*)d_src, nbInts, 0);
+                    ZL_zigzagEncode32_gpu((uint32_t*)d_dst, (int32_t const*)d_src, nbInts, tls_stream);
                     break;
                 case 8:
-                    ZL_zigzagEncode64_gpu((uint64_t*)d_dst, (int64_t const*)d_src, nbInts, 0);
+                    ZL_zigzagEncode64_gpu((uint64_t*)d_dst, (int64_t const*)d_src, nbInts, tls_stream);
                     break;
             }
-            cudaDeviceSynchronize();
-            cudaMemcpy(dst, d_dst, bytes, cudaMemcpyDeviceToHost);
+            cudaMemcpyAsync(dst, d_dst, bytes, cudaMemcpyDeviceToHost, tls_stream);
+            cudaStreamSynchronize(tls_stream);
             cudaFree(d_src);
             cudaFree(d_dst);
             ZL_ERR_IF_ERR(ZL_Output_commit(out, nbInts));
