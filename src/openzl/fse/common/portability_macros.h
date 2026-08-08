@@ -132,7 +132,7 @@
     defined(__x86_64__) &&                                        \
     (DYNAMIC_BMI2 || defined(__BMI2__)) &&                        \
     ZL_HAVE_X86_64_ASM
-# define ZSTD_ENABLE_ASM_X86_64_BMI2 1
+# define ZSTD_ENABLE_ASM_X86_64_BMI2 0
 #else
 # define ZSTD_ENABLE_ASM_X86_64_BMI2 0
 #endif

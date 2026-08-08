@@ -32,8 +32,7 @@ int cmdTrain(const TrainArgs& args)
             std::filesystem::create_directories(args.dictBundleOutput->name());
         }
     } else {
-        // Try to open the output file so it fails early
-        args.output->open();
+        // Output file will be opened when writing trained model
     }
 
     if (!args.inputs) {
@@ -168,12 +167,12 @@ int cmdTrain(const TrainArgs& args)
                 bundleOutput.close();
             }
         } else {
-            if (i != 0) {
-                throw std::logic_error("Must only have one trained compressor");
-            }
-            // Output file is already open
-            args.output->write(candidate.serializedCompressor);
-            args.output->close();
+            Logger::log_c(INFO, "Serialized compressor size: %zu bytes", candidate.serializedCompressor.size());
+            std::ofstream f(std::string(args.output->name()), std::ios::binary | std::ios::out);
+            f.write(candidate.serializedCompressor.data(), candidate.serializedCompressor.size());
+            f.flush();
+            f.close();
+            Logger::log_c(INFO, "Compressor saved to: %s", args.output->name().data());
 
             if (!fatBundle.empty()) {
                 // Dictionary training only runs when the user opted in with

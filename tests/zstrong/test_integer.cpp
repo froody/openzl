@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include "openzl/codecs/zl_iwt.h"
 #include "openzl/compress/private_nodes.h"
 #include "openzl/zl_opaque_types.h"
 #include "tests/zstrong/test_integer_fixture.h"
@@ -81,6 +82,26 @@ TEST_F(IntegerTest, Delta32)
 TEST_F(IntegerTest, Delta64)
 {
     testNode(ZL_NODE_DELTA_INT, 8);
+}
+
+TEST_F(IntegerTest, Iwt8)
+{
+    testNode(ZL_NODE_IWT_INT, 1);
+}
+
+TEST_F(IntegerTest, Iwt16)
+{
+    testNode(ZL_NODE_IWT_INT, 2);
+}
+
+TEST_F(IntegerTest, Iwt32)
+{
+    testNode(ZL_NODE_IWT_INT, 4);
+}
+
+TEST_F(IntegerTest, Iwt64)
+{
+    testNode(ZL_NODE_IWT_INT, 8);
 }
 
 TEST_F(IntegerTest, Zigzag8)

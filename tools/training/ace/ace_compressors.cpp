@@ -7,6 +7,7 @@
 #include "tools/training/ace/ace_sampling.h"
 
 #include "openzl/cpp/codecs/Bitsplit.hpp"
+#include "openzl/cpp/codecs/Iwt.hpp"
 
 namespace openzl {
 namespace training {
@@ -68,6 +69,7 @@ std::vector<ACENode> makeAllNodes()
 {
     std::vector<ACENode> n;
     n.push_back(buildNode(nodes::DeltaInt{}));
+    n.push_back(buildNode(nodes::IwtInt{}));
     n.push_back(buildNode(nodes::TokenizeStruct{}));
     for (auto sorted : { true, false }) {
         n.push_back(buildNode(nodes::TokenizeNumeric{ sorted }));

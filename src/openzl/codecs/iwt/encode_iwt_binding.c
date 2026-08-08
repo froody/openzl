@@ -1,0 +1,45 @@
+// Copyright (c) Meta Platforms, Inc. and affiliates.
+
+#include "encode_iwt_binding.h"
+#include "encode_iwt_kernel.h"
+#include "openzl/common/assertion.h"
+#include "openzl/common/errors_internal.h"
+#include "openzl/zl_data.h"
+
+ZL_Report EI_iwt_int(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
+{
+    ZL_RESULT_DECLARE_SCOPE_REPORT(eictx);
+    ZL_ASSERT_NN(eictx);
+    ZL_ASSERT_EQ(nbIns, 1);
+    ZL_ASSERT_NN(ins);
+    const ZL_Input* in = ins[0];
+    ZL_ASSERT_NN(in);
+    ZL_ASSERT_EQ(ZL_Input_type(in), ZL_Type_numeric);
+    size_t const intWidth = ZL_Input_eltWidth(in);
+    ZL_ASSERT(intWidth == 1 || intWidth == 2 || intWidth == 4 || intWidth == 8);
+    size_t const nbInts = ZL_Input_numElts(in);
+
+    size_t const nbApprox = (nbInts + 1) / 2;
+    size_t const nbDetail = nbInts / 2;
+
+    uint8_t header[1];
+    header[0] = (uint8_t)intWidth;
+    ZL_Encoder_sendCodecHeader(eictx, header, 1);
+
+    ZL_Output* const out0 = ZL_Encoder_createTypedStream(eictx, 0, nbApprox, intWidth);
+    ZL_ERR_IF_NULL(out0, allocation);
+
+    ZL_Output* const out1 = ZL_Encoder_createTypedStream(eictx, 1, nbDetail, intWidth);
+    ZL_ERR_IF_NULL(out1, allocation);
+
+    const void* src = ZL_Input_ptr(in);
+    void* dstApprox = ZL_Output_ptr(out0);
+    void* dstDetail = ZL_Output_ptr(out1);
+
+    ZS_iwtEncode(dstApprox, dstDetail, src, nbInts, intWidth);
+
+    ZL_ERR_IF_ERR(ZL_Output_commit(out0, nbApprox));
+    ZL_ERR_IF_ERR(ZL_Output_commit(out1, nbDetail));
+
+    return ZL_returnValue(2);
+}

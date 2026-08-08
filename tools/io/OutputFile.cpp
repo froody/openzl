@@ -21,51 +21,41 @@ poly::string_view OutputFile::name() const
 
 void OutputFile::open()
 {
-    static constexpr auto bits = std::ofstream::badbit | std::ofstream::failbit
-            | std::ofstream::eofbit;
-    os_.emplace();
-    os_->exceptions(bits);
-    try {
-        os_->open(filename_, std::ios::binary);
-    } catch (const std::system_error&) {
+    os_.emplace(filename_, std::ios::out | std::ios::binary);
+    if (!os_->is_open() || os_->fail()) {
         os_.reset();
-        throw IOException(
-                "Failed to open output file '" + filename_
-                + "': " + std::system_category().message(errno));
+        throw IOException("Failed to open output file '" + filename_ + "'");
     }
 }
 
 void OutputFile::close()
 {
-    try {
+    if (os_) {
+        if (os_->is_open()) {
+            os_->flush();
+            os_->close();
+        }
         os_.reset();
-    } catch (const std::system_error&) {
-        throw IOException(
-                "Failed to close output file '" + filename_
-                + "': " + std::system_category().message(errno));
     }
 }
 
 void OutputFile::write(poly::string_view contents)
 {
-    Logger::log_c(VERBOSE1, "Writing to output file '%s'", filename_.c_str());
-    if (!os_) {
+    if (!os_ || !os_->is_open()) {
         open();
     }
-
-    try {
-        os_->write(contents.data(), contents.size());
-    } catch (const std::system_error& err) {
-        // It's not clear that errno is set during failed write() calls.
-        // But err.code().message() sucks.
-        throw IOException(
-                "Failed to write to output file '" + filename_
-                + "': " + err.code().message());
+    os_->write(contents.data(), contents.size());
+    os_->flush();
+    if (os_->fail()) {
+        throw IOException("Failed to write to output file '" + filename_ + "'");
     }
 }
 
 std::ostream& OutputFile::get_ostream()
 {
+    if (!os_ || !os_->is_open()) {
+        open();
+    }
     return os_.value();
 }
 
