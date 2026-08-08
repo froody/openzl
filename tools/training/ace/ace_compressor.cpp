@@ -742,28 +742,9 @@ poly::optional<ACECompressionResult> benchmark(
         };
     };
 
-    if (inputs.size() == 1) {
-        return benchmarkOne(inputs[0]);
-    }
-
-    size_t numThreads = std::min<size_t>(
-            inputs.size(), std::thread::hardware_concurrency());
-    if (numThreads < 1) {
-        numThreads = 1;
-    }
-    ThreadPool pool(numThreads);
-
-    std::vector<std::future<poly::optional<ACECompressionResult>>> futures;
-    futures.reserve(inputs.size());
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        futures.emplace_back(pool.run([&benchmarkOne, &inputs, i]() {
-            return benchmarkOne(inputs[i]);
-        }));
-    }
-
     ACECompressionResult totalResult{};
     for (size_t i = 0; i < inputs.size(); ++i) {
-        auto res = futures[i].get();
+        auto res = benchmarkOne(inputs[i]);
         if (!res.has_value()) {
             return poly::nullopt;
         }
