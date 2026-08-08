@@ -96,8 +96,14 @@ EI_zstdWithCCtx(ZL_Encoder* eictx, ZSTD_CCtx* cctx, const ZL_Input* src)
     size_t const headerSize = ZL_varintEncode((uint64_t)eltWidth, ostart);
 
     /* Global parameters influence compression parameters */
-    ZL_ERR_IF_ZSTD_ERR(
-            ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+    ZL_LocalIntParams const lips = ZL_Encoder_getLocalIntParams(eictx);
+    if (lips.nbIntParams > 0) {
+        ZL_ERR_IF_ZSTD_ERR(
+                ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+    } else {
+        ZL_ERR_IF_ZSTD_ERR(
+                ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only));
+    }
 
     if (ZL_Encoder_getCParam(eictx, ZL_CParam_formatVersion) >= 9) {
         // Skip the zstd magic number for two reasons:
@@ -105,6 +111,9 @@ EI_zstdWithCCtx(ZL_Encoder* eictx, ZSTD_CCtx* cctx, const ZL_Input* src)
         // 2. It makes fuzzing harder, because the fuzzer can't find the magic.
         ZL_ERR_IF_ZSTD_ERR(ZSTD_CCtx_setParameter(
                 cctx, ZSTD_c_format, ZSTD_f_zstd1_magicless));
+    } else {
+        ZL_ERR_IF_ZSTD_ERR(ZSTD_CCtx_setParameter(
+                cctx, ZSTD_c_format, ZSTD_f_zstd1));
     }
 
     ZL_ERR_IF_ZSTD_ERR(ZSTD_CCtx_setParameter(
@@ -117,6 +126,9 @@ EI_zstdWithCCtx(ZL_Encoder* eictx, ZSTD_CCtx* cctx, const ZL_Input* src)
     if (decompressionLevel == 1) {
         ZL_ERR_IF_ZSTD_ERR(ZSTD_CCtx_setParameter(
                 cctx, ZSTD_c_literalCompressionMode, ZSTD_lcm_uncompressed));
+    } else {
+        ZL_ERR_IF_ZSTD_ERR(ZSTD_CCtx_setParameter(
+                cctx, ZSTD_c_literalCompressionMode, ZSTD_lcm_auto));
     }
 
     /* Local Integer Parameters can be employed to set advanced zstd compression
@@ -125,8 +137,6 @@ EI_zstdWithCCtx(ZL_Encoder* eictx, ZSTD_CCtx* cctx, const ZL_Input* src)
      * Some advanced parameters cannot be changed though.
      * See EI_zstd_parameter_valid().
      */
-
-    ZL_LocalIntParams const lips = ZL_Encoder_getLocalIntParams(eictx);
     for (size_t n = 0; n < lips.nbIntParams; n++) {
         ZL_IntParam const ip        = lips.intParams[n];
         ZSTD_cParameter const param = (ZSTD_cParameter)ip.paramId;
