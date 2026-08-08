@@ -30,6 +30,7 @@ struct TrainParams {
     poly::optional<size_t> maxTimeSecs;
     poly::optional<size_t> maxFileSizeMb;
     poly::optional<size_t> maxTotalSizeMb;
+    poly::optional<size_t> populationSize;
     bool paretoFrontier{ false };
     bool saveAceState{ false };
 };

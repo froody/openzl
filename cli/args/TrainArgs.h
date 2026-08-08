@@ -125,6 +125,18 @@ class TrainArgs : public GlobalArgs, public ProfileArgs {
                 0,
                 false,
                 "Save the ACE state as a local parameter in the trained compressor.");
+        parser.addCommandFlag(
+                cmd(),
+                kPopulationSize,
+                0,
+                true,
+                "Number of candidate compressors in the population per ACE generation (default: 100).");
+        parser.addCommandFlag(
+                cmd(),
+                kNumCandidates,
+                0,
+                true,
+                "Alias for --population-size.");
     }
 
     explicit TrainArgs(const arg::ParsedArgs& parsed)
@@ -200,6 +212,13 @@ class TrainArgs : public GlobalArgs, public ProfileArgs {
             trainParams.maxTotalSizeMb =
                     util::checkedstoul(maxTotalSizeMb.value());
         }
+        auto popSize = parsed.cmdFlag(cmd(), kPopulationSize);
+        if (!popSize) {
+            popSize = parsed.cmdFlag(cmd(), kNumCandidates);
+        }
+        if (popSize) {
+            trainParams.populationSize = util::checkedstoul(popSize.value());
+        }
 
         if (parsed.cmdHasFlag(cmd(), kParetoFrontier)) {
             trainParams.paretoFrontier = true;
@@ -265,6 +284,8 @@ class TrainArgs : public GlobalArgs, public ProfileArgs {
     inline static const std::string kMaxTotalSizeMb  = "max-total-size-mb";
     inline static const std::string kParetoFrontier  = "pareto-frontier";
     inline static const std::string kSaveAceState    = "save-ace-state";
+    inline static const std::string kPopulationSize  = "population-size";
+    inline static const std::string kNumCandidates  = "num-candidates";
 };
 
 } // namespace openzl::cli

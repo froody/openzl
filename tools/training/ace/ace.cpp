@@ -56,6 +56,9 @@ std::string trainBackend(
                 : std::thread::hardware_concurrency() / 2,
     };
     params.maxTime = maxTime;
+    if (trainParams.populationSize.has_value()) {
+        params.populationSize = trainParams.populationSize.value();
+    }
     AutomatedCompressorExplorer ace(flattened, params);
     for (;;) {
         Logger::logProgress(
