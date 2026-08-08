@@ -56,3 +56,12 @@ if(NOT TARGET fuzz_quars)
     target_link_libraries(fuzz_quars PRIVATE openzl)
     apply_openzl_compile_options_to_target(fuzz_quars)
 endif()
+
+if(NOT TARGET fuzz_btrblocks_selector)
+    add_executable(fuzz_btrblocks_selector
+        fuzz_btrblocks_selector.cpp
+    )
+    target_include_directories(fuzz_btrblocks_selector PRIVATE ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(fuzz_btrblocks_selector PRIVATE openzl openzl_cpp tools_training logger)
+    apply_openzl_compile_options_to_target(fuzz_btrblocks_selector)
+endif()

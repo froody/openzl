@@ -127,8 +127,4 @@ file(GLOB serialization_test_headers CONFIGURE_DEPENDS
 list(FILTER serialization_test_srcs EXCLUDE REGEX ".*/fuzz_.*\\.cpp$")
 add_zs_test(test_serialization ${serialization_test_srcs} ${serialization_test_headers})
 
-if(NOT TARGET fuzz_morton_3d)
-    add_subdirectory(fuzz)
-endif()
-
 
