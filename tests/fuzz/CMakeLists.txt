@@ -77,6 +77,7 @@ if(NOT TARGET fuzz_linear_predict)
         ${OPENZL_SRC_DIR}
     )
     target_link_libraries(fuzz_linear_predict PRIVATE openzl)
+    target_compile_definitions(fuzz_linear_predict PRIVATE STANDALONE_FUZZER)
     apply_openzl_compile_options_to_target(fuzz_linear_predict)
 endif()
 
