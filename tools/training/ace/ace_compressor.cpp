@@ -4,12 +4,14 @@
 
 #include <future>
 #include <sstream>
+#include <thread>
 #include <type_traits>
 
 #include "openzl/common/a1cbor_helpers.h"
 #include "openzl/common/allocation.h"
 #include "openzl/shared/a1cbor.h"
 #include "openzl/shared/xxhash.h"
+#include "tools/training/utils/thread_pool.h"
 
 namespace openzl {
 namespace training {
@@ -699,19 +701,28 @@ poly::optional<ACECompressionResult> benchmark(
             compressed = cctx.compress(input);
         } catch (const Exception&) {
             return poly::nullopt;
+        } catch (const std::exception&) {
+            return poly::nullopt;
         }
         auto cStop = std::chrono::steady_clock::now();
 
         auto dStart       = std::chrono::steady_clock::now();
-        auto roundTripped = dctx.decompress(compressed);
+        std::vector<Output> roundTripped;
+        try {
+            roundTripped = dctx.decompress(compressed);
+        } catch (const Exception&) {
+            return poly::nullopt;
+        } catch (const std::exception&) {
+            return poly::nullopt;
+        }
         auto dStop        = std::chrono::steady_clock::now();
 
         if (roundTripped.size() != input.size()) {
-            throw Exception("Bad round trip!");
+            return poly::nullopt;
         }
         for (size_t i = 0; i < input.size(); ++i) {
             if (roundTripped[i] != input[i]) {
-                throw std::runtime_error("Bad round trip!");
+                return poly::nullopt;
             }
         }
 
@@ -735,11 +746,19 @@ poly::optional<ACECompressionResult> benchmark(
         return benchmarkOne(inputs[0]);
     }
 
+    size_t numThreads = std::min<size_t>(
+            inputs.size(), std::thread::hardware_concurrency());
+    if (numThreads < 1) {
+        numThreads = 1;
+    }
+    ThreadPool pool(numThreads);
+
     std::vector<std::future<poly::optional<ACECompressionResult>>> futures;
     futures.reserve(inputs.size());
     for (size_t i = 0; i < inputs.size(); ++i) {
-        futures.emplace_back(
-                std::async(std::launch::async, benchmarkOne, inputs[i]));
+        futures.emplace_back(pool.run([&benchmarkOne, &inputs, i]() {
+            return benchmarkOne(inputs[i]);
+        }));
     }
 
     ACECompressionResult totalResult{};
