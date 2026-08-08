@@ -32,7 +32,8 @@ std::string trainBackend(
         std::vector<MultiInput>& samples,
         const TrainParams& trainParams,
         size_t graphIdx,
-        size_t numGraphs)
+        size_t numGraphs,
+        std::function<void(float)> progressReporter = nullptr)
 {
     if (samples.empty()) {
         throw Exception(
@@ -65,6 +66,11 @@ std::string trainBackend(
     double smoothedRemainingSecs = -1.0;
 
     auto updateProgress = [&](float progress) {
+        if (progressReporter) {
+            progressReporter(progress);
+            return;
+        }
+
         auto const now = std::chrono::steady_clock::now();
         auto const elapsedSecs =
                 std::chrono::duration_cast<std::chrono::seconds>(now - startTime)
@@ -113,7 +119,9 @@ std::string trainBackend(
         }
         ace.step();
     }
-    Logger::finalizeProgress(INFO);
+    if (!progressReporter) {
+        Logger::finalizeProgress(INFO);
+    }
     return ace.savePopulation();
 }
 
@@ -215,6 +223,65 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
                 totalRequestedThreads,
                 " total threads)...");
 
+        std::vector<float> graphProgresses(numActiveGraphs, 0.0f);
+        std::mutex progressMutex;
+        auto overallStartTime = std::chrono::steady_clock::now();
+        double smoothedRemainingSecs = -1.0;
+
+        auto updateCombinedProgress = [&](size_t taskIdx, float progress) {
+            std::lock_guard<std::mutex> lock(progressMutex);
+            graphProgresses[taskIdx] = progress;
+
+            float sumProgress = 0.0f;
+            for (float p : graphProgresses) {
+                sumProgress += p;
+            }
+            float const overallProgress =
+                    sumProgress / static_cast<float>(numActiveGraphs);
+
+            auto const now = std::chrono::steady_clock::now();
+            auto const elapsedSecs =
+                    std::chrono::duration_cast<std::chrono::seconds>(
+                            now - overallStartTime)
+                            .count();
+
+            std::string etaStr = "";
+            if (elapsedSecs >= 3 && overallProgress > 0.001f) {
+                double const totalEstSecs =
+                        static_cast<double>(elapsedSecs)
+                        / static_cast<double>(overallProgress);
+                double const rawRemainingSecs =
+                        totalEstSecs - static_cast<double>(elapsedSecs);
+
+                if (rawRemainingSecs > 0) {
+                    if (smoothedRemainingSecs < 0.0) {
+                        smoothedRemainingSecs = rawRemainingSecs;
+                    } else {
+                        smoothedRemainingSecs = 0.05 * rawRemainingSecs
+                                + 0.95 * smoothedRemainingSecs;
+                    }
+
+                    int const remMin =
+                            static_cast<int>(smoothedRemainingSecs) / 60;
+                    int const remSec =
+                            static_cast<int>(smoothedRemainingSecs) % 60;
+                    if (remMin > 0) {
+                        etaStr = " (ETA: " + std::to_string(remMin) + "m "
+                                + std::to_string(remSec) + "s)";
+                    } else {
+                        etaStr = " (ETA: " + std::to_string(remSec) + "s)";
+                    }
+                }
+            }
+
+            Logger::logProgress(
+                    INFO,
+                    overallProgress,
+                    "Training %zu ACE graphs in parallel%s: ACE progress",
+                    numActiveGraphs,
+                    etaStr.c_str());
+        };
+
         ThreadPool graphPool(numActiveGraphs);
         std::vector<std::future<std::string>> futures;
         futures.reserve(numActiveGraphs);
@@ -224,19 +291,27 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
             graphParams.threads     = threadsPerGraph;
 
             auto const& task = activeGraphTasks[i];
-            futures.emplace_back(graphPool.run(
-                    [&samples, graphParams, task, numGraphs]() {
-                        return trainBackend(
-                                samples[task.backendGraph],
-                                graphParams,
-                                task.graphIdx,
-                                numGraphs);
-                    }));
+            futures.emplace_back(graphPool.run([&samples,
+                                                graphParams,
+                                                task,
+                                                numGraphs,
+                                                i,
+                                                &updateCombinedProgress]() {
+                return trainBackend(
+                        samples[task.backendGraph],
+                        graphParams,
+                        task.graphIdx,
+                        numGraphs,
+                        [i, &updateCombinedProgress](float p) {
+                            updateCombinedProgress(i, p);
+                        });
+            }));
         }
 
         for (size_t i = 0; i < numActiveGraphs; ++i) {
             aceStates[i] = futures[i].get();
         }
+        Logger::finalizeProgress(INFO);
     }
 
     for (size_t i = 0; i < activeGraphTasks.size(); ++i) {
