@@ -66,8 +66,8 @@ ZL_Report EI_pcodec_int(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
     uint8_t header[ZL_VARINT_LENGTH_64 * 3];
     size_t headerSize = 0;
     header[headerSize++] = (uint8_t)eltWidth;
-    headerSize += ZL_varintEncode64Fast(header + headerSize, baseOffset);
-    headerSize += ZL_varintEncode64Fast(header + headerSize, multiplier);
+    headerSize += ZL_varintEncode64Fast(baseOffset, header + headerSize);
+    headerSize += ZL_varintEncode64Fast(multiplier, header + headerSize);
 
     ZL_Encoder_sendCodecHeader(eictx, header, headerSize);
 

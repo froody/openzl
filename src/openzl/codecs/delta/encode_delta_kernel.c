@@ -42,7 +42,16 @@ void ZS_deltaEncode32(
         return;
     }
     *first = src[0];
-    for (size_t n = 1; n < nelts; ++n) {
+    size_t n = 1;
+#if defined(__AVX2__)
+    for (; n + 8 <= nelts; n += 8) {
+        __m256i v_curr = _mm256_loadu_si256((__m256i const*)(src + n));
+        __m256i v_prev = _mm256_loadu_si256((__m256i const*)(src + n - 1));
+        __m256i v_diff = _mm256_sub_epi32(v_curr, v_prev);
+        _mm256_storeu_si256((__m256i*)(deltas + n - 1), v_diff);
+    }
+#endif
+    for (; n < nelts; ++n) {
         deltas[n - 1] = src[n] - src[n - 1];
     }
 }
@@ -57,7 +66,16 @@ void ZS_deltaEncode16(
         return;
     }
     *first = src[0];
-    for (size_t n = 1; n < nelts; ++n) {
+    size_t n = 1;
+#if defined(__AVX2__)
+    for (; n + 16 <= nelts; n += 16) {
+        __m256i v_curr = _mm256_loadu_si256((__m256i const*)(src + n));
+        __m256i v_prev = _mm256_loadu_si256((__m256i const*)(src + n - 1));
+        __m256i v_diff = _mm256_sub_epi16(v_curr, v_prev);
+        _mm256_storeu_si256((__m256i*)(deltas + n - 1), v_diff);
+    }
+#endif
+    for (; n < nelts; ++n) {
         deltas[n - 1] = (uint16_t)(src[n] - src[n - 1]);
     }
 }
@@ -72,7 +90,16 @@ void ZS_deltaEncode8(
         return;
     }
     *first = src[0];
-    for (size_t n = 1; n < nelts; ++n) {
+    size_t n = 1;
+#if defined(__AVX2__)
+    for (; n + 32 <= nelts; n += 32) {
+        __m256i v_curr = _mm256_loadu_si256((__m256i const*)(src + n));
+        __m256i v_prev = _mm256_loadu_si256((__m256i const*)(src + n - 1));
+        __m256i v_diff = _mm256_sub_epi8(v_curr, v_prev);
+        _mm256_storeu_si256((__m256i*)(deltas + n - 1), v_diff);
+    }
+#endif
+    for (; n < nelts; ++n) {
         deltas[n - 1] = (uint8_t)(src[n] - src[n - 1]);
     }
 }
