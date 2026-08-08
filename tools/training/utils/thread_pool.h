@@ -42,11 +42,15 @@ class ThreadPool {
                 std::make_shared<std::packaged_task<ReturnType()>>(std::bind(
                         std::forward<Func>(func), std::forward<Args>(args)...));
         std::future<ReturnType> result = task->get_future();
-        {
-            std::lock_guard<std::mutex> lock(queueMutex_);
-            taskQueue_.emplace([task]() { (*task)(); });
+        if (threads_.empty()) {
+            (*task)();
+        } else {
+            {
+                std::lock_guard<std::mutex> lock(queueMutex_);
+                taskQueue_.emplace([task]() { (*task)(); });
+            }
+            condition_.notify_one();
         }
-        condition_.notify_one();
         return result;
     }
 
