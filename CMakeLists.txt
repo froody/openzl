@@ -12,6 +12,7 @@ project(${PACKAGE_NAME} CXX C ASM)
 # ---- Build Options ----
 option(OPENZL_BUILD_ALL "Build all optional components" OFF)
 option(OPENZL_BUILD_SHARED_LIBS "Build as shared library" OFF)
+option(OPENZL_ENABLE_CUDA "Enable CUDA GPU acceleration" OFF)
 option(OPENZL_BUILD_TESTS "Build tests" ${OPENZL_BUILD_ALL})
 option(OPENZL_BUILD_BENCHMARKS "Build benchmarks" ${OPENZL_BUILD_ALL})
 # Apache Arrow build is broken due to missing thrift download.
@@ -150,6 +151,15 @@ if (${ZL_HAVE_X86_64_ASM})
         APPEND PROPERTY COMPILE_OPTIONS "-x" "assembler-with-cpp"
     )
     list(APPEND sources ${OPENZL_SRC_DIR}/openzl/fse/decompress/huf_decompress_amd64.S)
+endif()
+
+if(OPENZL_ENABLE_CUDA)
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 17)
+    list(APPEND sources
+        ${OPENZL_SRC_DIR}/openzl/codecs/gpu/encode_delta_gpu.cu
+        ${OPENZL_SRC_DIR}/openzl/codecs/gpu/encode_zigzag_gpu.cu
+    )
 endif()
 
 list(APPEND openzl_files
