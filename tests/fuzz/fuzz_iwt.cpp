@@ -76,37 +76,53 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     switch (mode) {
         case 0: { // uint8_t (1 byte)
             size_t const count = payloadSize / sizeof(uint8_t);
+            std::vector<uint8_t> vec(count);
+            if (count > 0) {
+                std::memcpy(vec.data(), payload, count * sizeof(uint8_t));
+            }
             fuzzIwtTyped<uint8_t>(
                     ZS_iwtEncode8,
                     ZS_iwtDecode8,
-                    reinterpret_cast<const uint8_t*>(payload),
+                    vec.data(),
                     count);
             break;
         }
         case 1: { // uint16_t (2 bytes)
             size_t const count = payloadSize / sizeof(uint16_t);
+            std::vector<uint16_t> vec(count);
+            if (count > 0) {
+                std::memcpy(vec.data(), payload, count * sizeof(uint16_t));
+            }
             fuzzIwtTyped<uint16_t>(
                     ZS_iwtEncode16,
                     ZS_iwtDecode16,
-                    reinterpret_cast<const uint16_t*>(payload),
+                    vec.data(),
                     count);
             break;
         }
         case 2: { // uint32_t (4 bytes)
             size_t const count = payloadSize / sizeof(uint32_t);
+            std::vector<uint32_t> vec(count);
+            if (count > 0) {
+                std::memcpy(vec.data(), payload, count * sizeof(uint32_t));
+            }
             fuzzIwtTyped<uint32_t>(
                     ZS_iwtEncode32,
                     ZS_iwtDecode32,
-                    reinterpret_cast<const uint32_t*>(payload),
+                    vec.data(),
                     count);
             break;
         }
         case 3: { // uint64_t (8 bytes)
             size_t const count = payloadSize / sizeof(uint64_t);
+            std::vector<uint64_t> vec(count);
+            if (count > 0) {
+                std::memcpy(vec.data(), payload, count * sizeof(uint64_t));
+            }
             fuzzIwtTyped<uint64_t>(
                     ZS_iwtEncode64,
                     ZS_iwtDecode64,
-                    reinterpret_cast<const uint64_t*>(payload),
+                    vec.data(),
                     count);
             break;
         }

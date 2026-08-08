@@ -7,12 +7,12 @@
 
 static inline int64_t floor_div2(int64_t v)
 {
-    return v >= 0 ? (v / 2) : ((v - 1) / 2);
+    return v >> 1;
 }
 
 static inline int64_t floor_div4(int64_t v)
 {
-    return v >= 0 ? (v / 4) : ((v - 3) / 4);
+    return v >> 2;
 }
 
 #define DEFINE_IWT_ENCODE(BITS, TYPE, STYPE)                                   \
@@ -28,8 +28,8 @@ void ZS_iwtEncode##BITS(TYPE* dstApprox, TYPE* dstDetail, TYPE const* src, size_
     for (size_t n = 0; n < nbDetail; ++n) {                                    \
         STYPE left = (STYPE)src[2 * n];                                        \
         STYPE right = (2 * n + 2 < nbElts) ? (STYPE)src[2 * n + 2] : left;      \
-        STYPE pred = (STYPE)floor_div2((int64_t)left + (int64_t)right);        \
-        dstDetail[n] = (TYPE)((STYPE)src[2 * n + 1] - pred);                   \
+        STYPE pred = (STYPE)floor_div2((int64_t)((uint64_t)left + (uint64_t)right)); \
+        dstDetail[n] = (TYPE)((uint64_t)src[2 * n + 1] - (uint64_t)pred);      \
     }                                                                          \
     for (size_t n = 0; n < nbApprox; ++n) {                                    \
         STYPE left_d, right_d;                                                 \
@@ -40,8 +40,8 @@ void ZS_iwtEncode##BITS(TYPE* dstApprox, TYPE* dstDetail, TYPE const* src, size_
             left_d = (STYPE)dstDetail[n - 1];                                  \
             right_d = (n < nbDetail) ? (STYPE)dstDetail[n] : left_d;            \
         }                                                                      \
-        STYPE upd = (STYPE)floor_div4((int64_t)left_d + (int64_t)right_d + 2);  \
-        dstApprox[n] = (TYPE)((STYPE)src[2 * n] + upd);                        \
+        STYPE upd = (STYPE)floor_div4((int64_t)((uint64_t)left_d + (uint64_t)right_d + 2)); \
+        dstApprox[n] = (TYPE)((uint64_t)src[2 * n] + (uint64_t)upd);           \
     }                                                                          \
 }
 

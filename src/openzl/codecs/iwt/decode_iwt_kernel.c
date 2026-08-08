@@ -7,12 +7,12 @@
 
 static inline int64_t floor_div2(int64_t v)
 {
-    return v >= 0 ? (v / 2) : ((v - 1) / 2);
+    return v >> 1;
 }
 
 static inline int64_t floor_div4(int64_t v)
 {
-    return v >= 0 ? (v / 4) : ((v - 3) / 4);
+    return v >> 2;
 }
 
 #define DEFINE_IWT_DECODE(BITS, TYPE, STYPE)                                   \
@@ -34,14 +34,14 @@ void ZS_iwtDecode##BITS(TYPE* dst, TYPE const* srcApprox, TYPE const* srcDetail,
             left_d = (STYPE)srcDetail[n - 1];                                  \
             right_d = (n < nbDetail) ? (STYPE)srcDetail[n] : left_d;            \
         }                                                                      \
-        STYPE upd = (STYPE)floor_div4((int64_t)left_d + (int64_t)right_d + 2);  \
-        dst[2 * n] = (TYPE)((STYPE)srcApprox[n] - upd);                        \
+        STYPE upd = (STYPE)floor_div4((int64_t)((uint64_t)left_d + (uint64_t)right_d + 2)); \
+        dst[2 * n] = (TYPE)((uint64_t)srcApprox[n] - (uint64_t)upd);           \
     }                                                                          \
     for (size_t n = 0; n < nbDetail; ++n) {                                    \
         STYPE left = (STYPE)dst[2 * n];                                        \
         STYPE right = (2 * n + 2 < nbElts) ? (STYPE)dst[2 * n + 2] : left;      \
-        STYPE pred = (STYPE)floor_div2((int64_t)left + (int64_t)right);        \
-        dst[2 * n + 1] = (TYPE)((STYPE)srcDetail[n] + pred);                   \
+        STYPE pred = (STYPE)floor_div2((int64_t)((uint64_t)left + (uint64_t)right)); \
+        dst[2 * n + 1] = (TYPE)((uint64_t)srcDetail[n] + (uint64_t)pred);       \
     }                                                                          \
 }
 
