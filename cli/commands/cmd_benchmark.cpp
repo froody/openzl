@@ -6,6 +6,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 
 #include "openzl/cpp/CCtx.hpp"
 #include "openzl/cpp/DCtx.hpp"
@@ -16,6 +17,7 @@
 #include "cli/utils/util.h"
 #include "tools/io/OutputNull.h"
 #include "tools/logger/Logger.h"
+#include "tools/training/utils/thread_pool.h"
 
 namespace openzl::cli {
 
@@ -98,17 +100,11 @@ BenchmarkResult runCompressionBenchmarks(const BenchmarkArgs& args)
     BenchmarkResult finalResult{};
     const auto iters = args.numIters;
 
-    // create compressor, context, and decompression context
-    auto cctx = createCompressionContext(
-            *args.compressor(), args.level, args.strict);
-    DCtx dctx;
-
     // Load dict bundle into DCtx if available
     std::optional<FatBundleDictLoader> fatBundleLoader;
     if (!args.dictBundleData.empty()) {
         fatBundleLoader.emplace();
         fatBundleLoader->loadFatBundle(args.dictBundleData);
-        dctx.refDictLoader(*fatBundleLoader);
     }
 
     // if output is not specified, don't write csv-formatted summary statistics
@@ -119,41 +115,45 @@ BenchmarkResult runCompressionBenchmarks(const BenchmarkArgs& args)
     csvOut << "srcSize,compressedSize,compressionRatio,ctimeMs,dtimeMs,iters,path"
            << std::endl;
 
-    // benchmark compression and decompression
-    auto cdur                      = std::chrono::nanoseconds::zero();
-    auto ddur                      = std::chrono::nanoseconds::zero();
-    size_t total_compressed_size   = 0;
-    size_t total_uncompressed_size = 0;
-    size_t total_inputs            = 0;
-    for (const auto& inputs : args.inputs) {
-        auto& inputVec = *inputs;
-        total_inputs++;
-        size_t uncompressed_size = 0;
-        for (const auto& input : *inputs) {
-            uncompressed_size += input.contentSize();
+    struct SingleBenchmarkResult {
+        size_t uncompressedSize{ 0 };
+        size_t compressedSize{ 0 };
+        std::chrono::nanoseconds cdur{ 0 };
+        std::chrono::nanoseconds ddur{ 0 };
+    };
+
+    auto runOneSample = [&](const openzl::training::MultiInput& mi)
+            -> SingleBenchmarkResult {
+        const auto& inputVec = *mi;
+        CCtx cctx = createCompressionContext(
+                *args.compressor(), args.level, args.strict);
+        DCtx dctx;
+        if (fatBundleLoader.has_value()) {
+            dctx.refDictLoader(*fatBundleLoader);
         }
+
+        SingleBenchmarkResult res;
+        for (const auto& input : inputVec) {
+            res.uncompressedSize += input.contentSize();
+        }
+
         // get the compressed size
         const auto compressed = cctx.compress(inputVec);
-
         util::logWarnings(cctx);
+        res.compressedSize = compressed.size();
 
-        total_compressed_size += compressed.size();
-        total_uncompressed_size += uncompressed_size;
-
-        // benchmark compression and decompression speeds
+        // benchmark compression speed
         const auto compression_start = std::chrono::steady_clock::now();
         for (size_t n = 0; n < iters; ++n) {
             const auto curr_compressed_size = cctx.compress(inputVec).size();
-
             util::logWarnings(cctx);
-
-            if (curr_compressed_size != compressed.size()) {
+            if (curr_compressed_size != res.compressedSize) {
                 throw std::runtime_error("Non-deterministic compression!");
             }
         }
         const auto compression_end = std::chrono::steady_clock::now();
 
-        // benchmark decompression
+        // benchmark decompression speed
         const auto decompression_start = std::chrono::steady_clock::now();
         for (size_t n = 0; n < iters; ++n) {
             auto decompressed = dctx.decompress(compressed);
@@ -166,26 +166,91 @@ BenchmarkResult runCompressionBenchmarks(const BenchmarkArgs& args)
             util::logWarnings(dctx);
         }
         const auto decompression_end = std::chrono::steady_clock::now();
-        cdur += compression_end - compression_start;
-        ddur += decompression_end - decompression_start;
-        finalResult = updateResults(
-                total_inputs,
-                iters,
-                total_compressed_size,
-                total_uncompressed_size,
-                cdur,
-                ddur);
-        csvOut << uncompressed_size << "," << compressed.size() << ","
-               << finalResult.compressionRatio << ","
-               << std::chrono::duration<double, std::milli>(
-                          compression_end - compression_start)
-                          .count()
-               << ","
-               << std::chrono::duration<double, std::milli>(
-                          decompression_end - decompression_start)
-                          .count()
-               << "," << iters << std::endl;
+
+        res.cdur = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                compression_end - compression_start);
+        res.ddur = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                decompression_end - decompression_start);
+        return res;
+    };
+
+    // benchmark compression and decompression
+    auto cdur                      = std::chrono::nanoseconds::zero();
+    auto ddur                      = std::chrono::nanoseconds::zero();
+    size_t total_compressed_size   = 0;
+    size_t total_uncompressed_size = 0;
+    size_t total_inputs            = 0;
+
+    if (args.inputs.size() <= 1) {
+        for (const auto& mi : args.inputs) {
+            total_inputs++;
+            auto res = runOneSample(mi);
+
+            total_compressed_size += res.compressedSize;
+            total_uncompressed_size += res.uncompressedSize;
+            cdur += res.cdur;
+            ddur += res.ddur;
+
+            finalResult = updateResults(
+                    total_inputs,
+                    iters,
+                    total_compressed_size,
+                    total_uncompressed_size,
+                    cdur,
+                    ddur);
+            csvOut << res.uncompressedSize << "," << res.compressedSize << ","
+                   << finalResult.compressionRatio << ","
+                   << std::chrono::duration<double, std::milli>(res.cdur)
+                              .count()
+                   << ","
+                   << std::chrono::duration<double, std::milli>(res.ddur)
+                              .count()
+                   << "," << iters << std::endl;
+        }
+    } else {
+        size_t numThreads = std::min<size_t>(
+                args.inputs.size(), std::thread::hardware_concurrency());
+        if (numThreads < 1) {
+            numThreads = 1;
+        }
+        training::ThreadPool pool(numThreads);
+
+        std::vector<std::future<SingleBenchmarkResult>> futures;
+        futures.reserve(args.inputs.size());
+
+        for (size_t i = 0; i < args.inputs.size(); ++i) {
+            futures.emplace_back(pool.run([&runOneSample, &args, i]() {
+                return runOneSample(args.inputs[i]);
+            }));
+        }
+
+        for (size_t i = 0; i < args.inputs.size(); ++i) {
+            auto res = futures[i].get();
+            total_inputs++;
+
+            total_compressed_size += res.compressedSize;
+            total_uncompressed_size += res.uncompressedSize;
+            cdur += res.cdur;
+            ddur += res.ddur;
+
+            finalResult = updateResults(
+                    total_inputs,
+                    iters,
+                    total_compressed_size,
+                    total_uncompressed_size,
+                    cdur,
+                    ddur);
+            csvOut << res.uncompressedSize << "," << res.compressedSize << ","
+                   << finalResult.compressionRatio << ","
+                   << std::chrono::duration<double, std::milli>(res.cdur)
+                              .count()
+                   << ","
+                   << std::chrono::duration<double, std::milli>(res.ddur)
+                              .count()
+                   << "," << iters << std::endl;
+        }
     }
+
     // Finish the benchmark line.
     Logger::finalizeUpdate(INFO);
 
