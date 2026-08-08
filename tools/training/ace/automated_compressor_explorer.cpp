@@ -107,9 +107,34 @@ std::vector<float> AutomatedCompressorExplorer::computeFitness(
     return computeFitness(gene, inputs_);
 }
 
+double AutomatedCompressorExplorer::progress() const
+{
+    double subGen = 0.0;
+    size_t const total = totalCandidates_.load();
+    if (total > 0) {
+        subGen = static_cast<double>(completedCandidates_.load()) / static_cast<double>(total);
+    }
+    double const generationProgress =
+            (static_cast<double>(generation()) + subGen) / static_cast<double>(maxGenerations());
+
+    if (!deadline().has_value()) {
+        return std::min(1.0, generationProgress);
+    }
+
+    std::chrono::nanoseconds const remaining =
+            deadline().value() - std::chrono::steady_clock::now();
+    std::chrono::nanoseconds const maxTime = parameters().maxTime.value();
+    double const timeProgress = 1.0 - (double)remaining.count() / maxTime.count();
+
+    return std::min(1.0, std::max(generationProgress, timeProgress));
+}
+
 std::vector<std::vector<float>> AutomatedCompressorExplorer::computeFitness(
         poly::span<const ACECompressor> genes)
 {
+    totalCandidates_     = genes.size();
+    completedCandidates_ = 0;
+
     std::vector<std::future<std::vector<float>>> futures;
     futures.reserve(genes.size());
     for (const auto& gene : genes) {
@@ -142,6 +167,10 @@ std::vector<std::vector<float>> AutomatedCompressorExplorer::computeFitness(
             ++cache->second.first;
         }
         results.push_back(std::move(result));
+        completedCandidates_++;
+        if (progressCallback_) {
+            progressCallback_(static_cast<float>(progress()));
+        }
     }
     return results;
 }

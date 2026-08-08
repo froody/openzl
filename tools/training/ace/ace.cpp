@@ -61,15 +61,15 @@ std::string trainBackend(
     }
     AutomatedCompressorExplorer ace(flattened, params);
     auto startTime = std::chrono::steady_clock::now();
-    for (;;) {
-        float const progress = ace.progress();
+
+    auto updateProgress = [&](float progress) {
         auto const now = std::chrono::steady_clock::now();
         auto const elapsedSecs =
                 std::chrono::duration_cast<std::chrono::seconds>(now - startTime)
                         .count();
 
         std::string etaStr = "";
-        if (progress > 0.01f && elapsedSecs > 1) {
+        if (elapsedSecs >= 2 && progress > 0.00001f) {
             double const totalEstSecs =
                     static_cast<double>(elapsedSecs) / static_cast<double>(progress);
             double const remainingSecs = totalEstSecs - static_cast<double>(elapsedSecs);
@@ -92,6 +92,12 @@ std::string trainBackend(
                 graphIdx,
                 numGraphs,
                 etaStr.c_str());
+    };
+
+    ace.setProgressCallback(updateProgress);
+
+    for (;;) {
+        updateProgress(static_cast<float>(ace.progress()));
         if (ace.finished()) {
             break;
         }

@@ -149,6 +149,15 @@ class AutomatedCompressorExplorer : public GeneticAlgorithm<ACECompressor> {
     std::vector<std::vector<float>> computeFitness(
             poly::span<const ACECompressor> genes) override;
 
+    using ProgressCallback = std::function<void(float progress)>;
+
+    void setProgressCallback(ProgressCallback cb)
+    {
+        progressCallback_ = std::move(cb);
+    }
+
+    double progress() const;
+
     static constexpr size_t kAceStateParamId = 592;
 
    private:
@@ -162,6 +171,9 @@ class AutomatedCompressorExplorer : public GeneticAlgorithm<ACECompressor> {
     ACEMutate mutate_;
     std::unordered_map<uint64_t, std::pair<size_t, std::vector<float>>>
             cachedFitness_;
+    std::atomic<size_t> completedCandidates_{ 0 };
+    std::atomic<size_t> totalCandidates_{ 0 };
+    ProgressCallback progressCallback_;
 };
 
 } // namespace training
