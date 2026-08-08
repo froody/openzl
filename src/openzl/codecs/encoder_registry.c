@@ -28,6 +28,7 @@
 #include "openzl/codecs/parse_int/encode_parse_int_binding.h"
 #include "openzl/codecs/partition/encode_partition_binding.h"
 #include "openzl/codecs/pivco_huffman/encode_pivco_binding.h"
+#include "openzl/codecs/pcodec/encode_pcodec_binding.h"
 #include "openzl/codecs/prefix/encode_prefix_binding.h"
 #include "openzl/codecs/quantize/encode_quantize_binding.h"
 #include "openzl/codecs/range_pack/encode_range_pack_binding.h"
@@ -92,6 +93,7 @@ const CNode ER_standardNodes[STANDARD_ENCODERS_NB] = {
     REGISTER_TRANSFORM(ZL_StandardNodeID_bfloat16_deconstruct, ZL_StandardTransformID_float_deconstruct, 5, 200, EI_BFLOAT16_DECONSTRUCT),
     REGISTER_TRANSFORM(ZL_StandardNodeID_float16_deconstruct, ZL_StandardTransformID_float_deconstruct, 5, 200, EI_FLOAT16_DECONSTRUCT),
     REGISTER_TRANSFORM(ZL_StandardNodeID_field_lz, ZL_StandardTransformID_field_lz, 3, 200, EI_FIELD_LZ),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_pcodec_int, ZL_StandardTransformID_pcodec_int, 3, 200, EI_PCODEC_INT),
 
     // Conversion operations
     REGISTER_TRANSFORM(ZL_StandardNodeID_convert_serial_to_struct, ZL_StandardTransformID_convert_serial_to_struct, 3, 200, EI_CONVERT_SERIAL_TO_STRUCT),

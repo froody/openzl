@@ -100,6 +100,8 @@ typedef enum {
 
     ZL_StandardNodeID_iwt_int,
 
+    ZL_StandardNodeID_pcodec_int,
+
     ZL_StandardNodeID_public_end // last id, used to detect end of public range
 } ZL_StandardNodeID;
 

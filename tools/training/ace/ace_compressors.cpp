@@ -70,6 +70,7 @@ std::vector<ACENode> makeAllNodes()
     std::vector<ACENode> n;
     n.push_back(buildNode(nodes::DeltaInt{}));
     n.push_back(buildNode(nodes::IwtInt{}));
+    n.push_back(buildNode(nodes::PcodecInt{}));
     n.push_back(buildNode(nodes::TokenizeStruct{}));
     for (auto sorted : { true, false }) {
         n.push_back(buildNode(nodes::TokenizeNumeric{ sorted }));

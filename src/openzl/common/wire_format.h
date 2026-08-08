@@ -322,6 +322,8 @@ typedef enum {
 
     ZL_StandardTransformID_iwt_int = 68,
 
+    ZL_StandardTransformID_pcodec_int = 69,
+
     ZL_StandardTransformID_end =
             128 // last id, used to detect end of ID range (impacts
                 // header encoding) give some room to be able to add new
