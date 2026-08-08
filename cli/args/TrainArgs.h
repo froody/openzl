@@ -137,6 +137,12 @@ class TrainArgs : public GlobalArgs, public ProfileArgs {
                 0,
                 true,
                 "Alias for --population-size.");
+        parser.addCommandFlag(
+                cmd(),
+                kBtrBlocksSelector,
+                0,
+                false,
+                "Use BtrBlocks micro-chunk decision tree selector during candidate exploration.");
     }
 
     explicit TrainArgs(const arg::ParsedArgs& parsed)
@@ -229,6 +235,8 @@ class TrainArgs : public GlobalArgs, public ProfileArgs {
 
         trainParams.noClustering = parsed.cmdHasFlag(cmd(), kNoClustering);
         trainParams.saveAceState = parsed.cmdHasFlag(cmd(), kSaveAceState);
+        trainParams.useBtrBlocksSelector =
+                parsed.cmdHasFlag(cmd(), kBtrBlocksSelector);
 
         // Dictionary training is opt-in: it runs only when the user explicitly
         // requests a bundle output path, so we never produce a surprise .zd
@@ -286,6 +294,7 @@ class TrainArgs : public GlobalArgs, public ProfileArgs {
     inline static const std::string kSaveAceState    = "save-ace-state";
     inline static const std::string kPopulationSize  = "population-size";
     inline static const std::string kNumCandidates  = "num-candidates";
+    inline static const std::string kBtrBlocksSelector = "btrblocks-selector";
 };
 
 } // namespace openzl::cli

@@ -4,6 +4,7 @@
 #include "cli/commands/cmd_benchmark.h"
 #include "custom_parsers/dependency_registration.h"
 #include "tools/logger/Logger.h"
+#include "tools/training/btrblocks_selector.h"
 #include "tools/training/clustering/sample_limiter.h"
 #include "tools/training/train.h"
 

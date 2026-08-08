@@ -33,6 +33,7 @@ struct TrainParams {
     poly::optional<size_t> populationSize;
     bool paretoFrontier{ false };
     bool saveAceState{ false };
+    bool useBtrBlocksSelector{ false };
 };
 
 } // namespace openzl::training

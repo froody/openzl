@@ -1,11 +1,13 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
 
+#include <cinttypes>
 #include <chrono>
 #include <vector>
 
 #include "tools/logger/Logger.h"
 #include "tools/ml_selector/ml_selector_trainer.h"
 #include "tools/training/ace/ace.h"
+#include "tools/training/btrblocks_selector.h"
 #include "tools/training/clustering/clustering_graph_trainer.h"
 #include "tools/training/dict/base_dict_trainer.h"
 #include "tools/training/graph_mutation/graph_mutation_utils.h"
@@ -26,6 +28,21 @@ std::vector<TrainedCandidate> train(
     std::vector<SerializedCompressorInternal> serializedTrainedCompressors;
     if (!trainParams.compressorGenFunc) {
         throw Exception("Compressor generator function is not set.");
+    }
+
+    if (trainParams.useBtrBlocksSelector || graph_mutation::hasTargetGraph(compressor, ACE_GRAPH_NAME) || graph_mutation::hasTargetGraph(compressor, CLUSTERING_GRAPH_NAME)) {
+        BtrBlocksSelector selector;
+        StreamStats stats = selector.analyzeInputs(inputs);
+        PreconditioningCandidate candidate = BtrBlocksSelector::evaluateDecisionTree(stats);
+        Logger::log_c(
+                INFO,
+                "BtrBlocks micro-chunk decision tree selected pre-conditioning candidate: %s (entropy=%.2f, rle=%.2f, deltaVar=%.2f, rangeRatio=%.2f, gcd=%" PRIu64 ")",
+                candidateToString(candidate).c_str(),
+                stats.entropy,
+                stats.rleRatio,
+                stats.deltaVarRatio,
+                stats.rangeBitsRatio,
+                stats.gcdStep);
     }
 
     if (graph_mutation::hasTargetGraph(compressor, CLUSTERING_GRAPH_NAME)) {
