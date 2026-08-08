@@ -62,6 +62,8 @@ std::string trainBackend(
     AutomatedCompressorExplorer ace(flattened, params);
     auto startTime = std::chrono::steady_clock::now();
 
+    double smoothedRemainingSecs = -1.0;
+
     auto updateProgress = [&](float progress) {
         auto const now = std::chrono::steady_clock::now();
         auto const elapsedSecs =
@@ -69,13 +71,21 @@ std::string trainBackend(
                         .count();
 
         std::string etaStr = "";
-        if (elapsedSecs >= 2 && progress > 0.00001f) {
+        if (elapsedSecs >= 3 && progress > 0.001f) {
             double const totalEstSecs =
                     static_cast<double>(elapsedSecs) / static_cast<double>(progress);
-            double const remainingSecs = totalEstSecs - static_cast<double>(elapsedSecs);
-            if (remainingSecs > 0) {
-                int const remMin = static_cast<int>(remainingSecs) / 60;
-                int const remSec = static_cast<int>(remainingSecs) % 60;
+            double const rawRemainingSecs = totalEstSecs - static_cast<double>(elapsedSecs);
+
+            if (rawRemainingSecs > 0) {
+                if (smoothedRemainingSecs < 0.0) {
+                    smoothedRemainingSecs = rawRemainingSecs;
+                } else {
+                    // Exponential Moving Average with alpha = 0.05 for high stability
+                    smoothedRemainingSecs = 0.05 * rawRemainingSecs + 0.95 * smoothedRemainingSecs;
+                }
+
+                int const remMin = static_cast<int>(smoothedRemainingSecs) / 60;
+                int const remSec = static_cast<int>(smoothedRemainingSecs) % 60;
                 if (remMin > 0) {
                     etaStr = " (ETA: " + std::to_string(remMin) + "m "
                             + std::to_string(remSec) + "s)";
