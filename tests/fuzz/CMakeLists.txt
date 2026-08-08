@@ -65,3 +65,31 @@ if(NOT TARGET fuzz_btrblocks_selector)
     target_link_libraries(fuzz_btrblocks_selector PRIVATE openzl openzl_cpp tools_training logger)
     apply_openzl_compile_options_to_target(fuzz_btrblocks_selector)
 endif()
+
+if(NOT TARGET fuzz_linear_predict)
+    add_executable(fuzz_linear_predict
+        fuzz_linear_predict.cpp
+        ${OPENZL_SRC_DIR}/openzl/codecs/linear_predict/encode_linear_predict_kernel.c
+        ${OPENZL_SRC_DIR}/openzl/codecs/linear_predict/decode_linear_predict_kernel.c
+    )
+    target_include_directories(fuzz_linear_predict PRIVATE
+        ${OPENZL_INCLUDE_DIR}
+        ${OPENZL_SRC_DIR}
+    )
+    target_link_libraries(fuzz_linear_predict PRIVATE openzl)
+    apply_openzl_compile_options_to_target(fuzz_linear_predict)
+endif()
+
+if(NOT TARGET fuzz_octree_occupancy)
+    add_executable(fuzz_octree_occupancy
+        fuzz_octree_occupancy.cpp
+        ${OPENZL_SRC_DIR}/openzl/codecs/octree_occupancy/encode_octree_occupancy_kernel.c
+        ${OPENZL_SRC_DIR}/openzl/codecs/octree_occupancy/decode_octree_occupancy_kernel.c
+    )
+    target_include_directories(fuzz_octree_occupancy PRIVATE
+        ${OPENZL_INCLUDE_DIR}
+        ${OPENZL_SRC_DIR}
+    )
+    target_link_libraries(fuzz_octree_occupancy PRIVATE openzl)
+    apply_openzl_compile_options_to_target(fuzz_octree_occupancy)
+endif()
