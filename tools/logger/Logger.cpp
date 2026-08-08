@@ -37,9 +37,9 @@ void Logger::reprintProgressIfActive()
     if (instance().progress_line_active
         && shouldLog(instance().progress_level)) {
         // Re-print the stored progress message
-        update(instance().progress_level,
-               "%s",
-               instance().progress_message.c_str());
+        update_unlocked(instance().progress_level,
+                        "%s",
+                        instance().progress_message.c_str());
     }
 }
 

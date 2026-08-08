@@ -39,7 +39,7 @@ class Logger {
 
     int global_verbosity;      // TODO where to set this by default?
     bool progress_line_active; // Track if we have an active progress line
-    std::mutex logMutex_;
+    std::recursive_mutex logMutex_;
 
     // Store current progress information for re-printing
     LogLevel progress_level;
@@ -92,7 +92,7 @@ class Logger {
     static void log(LogLevel level, const Args&... args)
     {
         if (shouldLog(level)) {
-            std::lock_guard<std::mutex> lock(instance().logMutex_);
+            std::lock_guard<std::recursive_mutex> lock(instance().logMutex_);
             finalizeProgressIfActive();
             log_inner(std::cerr, args...);
             std::cerr << '\n';
@@ -108,7 +108,7 @@ class Logger {
             return;
         }
 
-        std::lock_guard<std::mutex> lock(instance().logMutex_);
+        std::lock_guard<std::recursive_mutex> lock(instance().logMutex_);
         finalizeProgressIfActive();
 
 #pragma GCC diagnostic push
@@ -122,13 +122,12 @@ class Logger {
 
    public:
     template <typename... Args>
-    static void update(LogLevel level, const char* format, const Args&... args)
+    static void update_unlocked(LogLevel level, const char* format, const Args&... args)
     {
         if (!shouldLog(level)) {
             return;
         }
 
-        std::lock_guard<std::mutex> lock(instance().logMutex_);
         // Move to beginning of line
         // TODO remove control characters when printing to non-tty
         fprintf(stderr, "\r");
@@ -147,6 +146,17 @@ class Logger {
     }
 
     template <typename... Args>
+    static void update(LogLevel level, const char* format, const Args&... args)
+    {
+        if (!shouldLog(level)) {
+            return;
+        }
+
+        std::lock_guard<std::recursive_mutex> lock(instance().logMutex_);
+        update_unlocked(level, format, args...);
+    }
+
+    template <typename... Args>
     static void logProgress(
             LogLevel level,
             double progress,
@@ -162,6 +172,8 @@ class Logger {
                     "Progress percentage must be <= 1.0, got: "
                     + std::to_string(progress) + ".");
         }
+
+        std::lock_guard<std::recursive_mutex> lock(instance().logMutex_);
 
         instance().progress_line_active = true;
 
@@ -196,7 +208,7 @@ class Logger {
         progressBar[progressBarWidth + 2] = '\0';
         instance().progress_message = std::string(progressBar) + " " + userMsg;
 
-        update(level, "%s", instance().progress_message.c_str());
+        update_unlocked(level, "%s", instance().progress_message.c_str());
     }
 
     // Finalize an update line by adding a newline
