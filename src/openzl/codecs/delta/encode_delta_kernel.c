@@ -103,17 +103,17 @@ void ZS_deltaEncode8(
             cudaStreamCreateWithFlags(&tls_stream, cudaStreamNonBlocking);
         }
         uint8_t *d_first = NULL, *d_deltas = NULL, *d_src = NULL;
-        if (cudaMalloc(&d_src, nelts) == cudaSuccess &&
-            cudaMalloc(&d_deltas, nelts - 1) == cudaSuccess &&
-            cudaMalloc(&d_first, 1) == cudaSuccess) {
+        if (cudaMallocAsync(&d_src, nelts, tls_stream) == cudaSuccess &&
+            cudaMallocAsync(&d_deltas, nelts - 1, tls_stream) == cudaSuccess &&
+            cudaMallocAsync(&d_first, 1, tls_stream) == cudaSuccess) {
             cudaMemcpyAsync(d_src, src, nelts, cudaMemcpyHostToDevice, tls_stream);
             ZS_deltaEncode8_gpu(d_first, d_deltas, d_src, nelts, tls_stream);
             cudaMemcpyAsync(first, d_first, 1, cudaMemcpyDeviceToHost, tls_stream);
             cudaMemcpyAsync(deltas, d_deltas, nelts - 1, cudaMemcpyDeviceToHost, tls_stream);
+            cudaFreeAsync(d_src, tls_stream);
+            cudaFreeAsync(d_deltas, tls_stream);
+            cudaFreeAsync(d_first, tls_stream);
             cudaStreamSynchronize(tls_stream);
-            cudaFree(d_src);
-            cudaFree(d_deltas);
-            cudaFree(d_first);
             return;
         }
     }

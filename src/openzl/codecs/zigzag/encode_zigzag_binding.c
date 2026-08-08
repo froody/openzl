@@ -36,8 +36,8 @@ ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
         void* dst       = ZL_Output_ptr(out);
         void *d_src = NULL, *d_dst = NULL;
         size_t const bytes = nbInts * numWidth;
-        if (cudaMalloc(&d_src, bytes) == cudaSuccess &&
-            cudaMalloc(&d_dst, bytes) == cudaSuccess) {
+        if (cudaMallocAsync(&d_src, bytes, tls_stream) == cudaSuccess &&
+            cudaMallocAsync(&d_dst, bytes, tls_stream) == cudaSuccess) {
             cudaMemcpyAsync(d_src, src, bytes, cudaMemcpyHostToDevice, tls_stream);
             switch (numWidth) {
                 case 1:
@@ -54,9 +54,9 @@ ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
                     break;
             }
             cudaMemcpyAsync(dst, d_dst, bytes, cudaMemcpyDeviceToHost, tls_stream);
+            cudaFreeAsync(d_src, tls_stream);
+            cudaFreeAsync(d_dst, tls_stream);
             cudaStreamSynchronize(tls_stream);
-            cudaFree(d_src);
-            cudaFree(d_dst);
             ZL_ERR_IF_ERR(ZL_Output_commit(out, nbInts));
             return ZL_returnValue(1);
         }
