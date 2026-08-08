@@ -324,6 +324,22 @@ typedef enum {
 
     ZL_StandardTransformID_pcodec_int = 69,
 
+    ZL_StandardTransformID_bitplane_split = 70,
+
+    ZL_StandardTransformID_morton_3d = 71,
+
+    ZL_StandardTransformID_quars = 72,
+
+    ZL_StandardTransformID_linear_predict = 73,
+
+    ZL_StandardTransformID_elf_erase = 74,
+
+    ZL_StandardTransformID_spherical_range = 75,
+
+    ZL_StandardTransformID_tans4_interleaved = 76,
+
+    ZL_StandardTransformID_octree_occupancy = 77,
+
     ZL_StandardTransformID_end =
             128 // last id, used to detect end of ID range (impacts
                 // header encoding) give some room to be able to add new

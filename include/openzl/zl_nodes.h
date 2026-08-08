@@ -102,6 +102,22 @@ typedef enum {
 
     ZL_StandardNodeID_pcodec_int,
 
+    ZL_StandardNodeID_quars,
+
+    ZL_StandardNodeID_bitplane_split,
+
+    ZL_StandardNodeID_morton_3d,
+
+    ZL_StandardNodeID_linear_predict,
+
+    ZL_StandardNodeID_elf_erase,
+
+    ZL_StandardNodeID_tans4_interleaved,
+
+    ZL_StandardNodeID_spherical_range,
+
+    ZL_StandardNodeID_octree_occupancy,
+
     ZL_StandardNodeID_public_end // last id, used to detect end of public range
 } ZL_StandardNodeID;
 

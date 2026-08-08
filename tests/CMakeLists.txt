@@ -14,6 +14,7 @@ endfunction()
 
 add_subdirectory(datagen)
 add_subdirectory(compat)
+add_subdirectory(fuzz)
 
 file(
     GLOB_RECURSE test_fixtures
@@ -126,5 +127,8 @@ file(GLOB serialization_test_headers CONFIGURE_DEPENDS
 list(FILTER serialization_test_srcs EXCLUDE REGEX ".*/fuzz_.*\\.cpp$")
 add_zs_test(test_serialization ${serialization_test_srcs} ${serialization_test_headers})
 
-# NOTE: Fuzzer tests (zstrong/fuzz_*.cpp) are BUCK-only targets using Meta's
-# Lionhead infrastructure and are not included in the CMake build.
+if(NOT TARGET fuzz_morton_3d)
+    add_subdirectory(fuzz)
+endif()
+
+

@@ -3,6 +3,7 @@
 #include "openzl/codecs/encoder_registry.h"
 
 #include "openzl/codecs/bitSplit/encode_bitSplit_binding.h"
+#include "openzl/codecs/bitplane_split/encode_bitplane_split_binding.h"
 #include "openzl/codecs/bitSplit/encode_bitsplit_bf16_binding.h"
 #include "openzl/codecs/bitSplit/encode_bitsplit_fp_binding.h"
 #include "openzl/codecs/bitSplit/encode_bitsplit_top8_binding.h"
@@ -16,28 +17,35 @@
 #include "openzl/codecs/dispatchN_byTag/encode_dispatchN_byTag_binding.h"
 #include "openzl/codecs/dispatch_string/encode_dispatch_string_binding.h"
 #include "openzl/codecs/divide_by/encode_divide_by_binding.h"
+#include "openzl/codecs/elf_erase/encode_elf_erase_binding.h"
 #include "openzl/codecs/entropy/encode_entropy_binding.h"
 #include "openzl/codecs/flatpack/encode_flatpack_binding.h"
 #include "openzl/codecs/float_deconstruct/encode_float_deconstruct_binding.h"
 #include "openzl/codecs/interleave/encode_interleave_binding.h"
 #include "openzl/codecs/iwt/encode_iwt_binding.h"
 #include "openzl/codecs/lz/encode_lz_binding.h"
+#include "openzl/codecs/linear_predict/encode_linear_predict_binding.h"
 #include "openzl/codecs/lz4/encode_lz4_binding.h"
 #include "openzl/codecs/merge_sorted/encode_merge_sorted_binding.h"
+#include "openzl/codecs/morton_3d/encode_morton_3d_binding.h"
 #include "openzl/codecs/mux_lengths/encode_mux_lengths_binding.h"
+#include "openzl/codecs/octree_occupancy/encode_octree_occupancy_binding.h"
 #include "openzl/codecs/parse_int/encode_parse_int_binding.h"
 #include "openzl/codecs/partition/encode_partition_binding.h"
 #include "openzl/codecs/pivco_huffman/encode_pivco_binding.h"
 #include "openzl/codecs/pcodec/encode_pcodec_binding.h"
+#include "openzl/codecs/quars/encode_quars_binding.h"
 #include "openzl/codecs/prefix/encode_prefix_binding.h"
 #include "openzl/codecs/quantize/encode_quantize_binding.h"
 #include "openzl/codecs/range_pack/encode_range_pack_binding.h"
 #include "openzl/codecs/rolz/encode_rolz_binding.h"
 #include "openzl/codecs/sentinel/encode_sentinel_binding.h"
 #include "openzl/codecs/sparse_num/encode_sparse_num_binding.h"
+#include "openzl/codecs/spherical_range/encode_spherical_range_binding.h"
 #include "openzl/codecs/splitByStruct/encode_splitByStruct_binding.h"
 #include "openzl/codecs/splitN/encode_splitN_binding.h"
 #include "openzl/codecs/splitN/encode_split_byrange_binding.h"
+#include "openzl/codecs/tans4_interleaved/encode_tans4_interleaved_binding.h"
 #include "openzl/codecs/tokenize/encode_tokenize_binding.h"
 #include "openzl/codecs/transpose/encode_transpose_binding.h"
 #include "openzl/codecs/zigzag/encode_zigzag_binding.h"
@@ -94,6 +102,7 @@ const CNode ER_standardNodes[STANDARD_ENCODERS_NB] = {
     REGISTER_TRANSFORM(ZL_StandardNodeID_float16_deconstruct, ZL_StandardTransformID_float_deconstruct, 5, 200, EI_FLOAT16_DECONSTRUCT),
     REGISTER_TRANSFORM(ZL_StandardNodeID_field_lz, ZL_StandardTransformID_field_lz, 3, 200, EI_FIELD_LZ),
     REGISTER_TRANSFORM(ZL_StandardNodeID_pcodec_int, ZL_StandardTransformID_pcodec_int, 3, 200, EI_PCODEC_INT),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_elf_erase, ZL_StandardTransformID_elf_erase, 27, 200, EI_ELF_ERASE),
 
     // Conversion operations
     REGISTER_TRANSFORM(ZL_StandardNodeID_convert_serial_to_struct, ZL_StandardTransformID_convert_serial_to_struct, 3, 200, EI_CONVERT_SERIAL_TO_STRUCT),
@@ -144,6 +153,11 @@ const CNode ER_standardNodes[STANDARD_ENCODERS_NB] = {
     REGISTER_TRANSFORM(ZL_StandardNodeID_sparse_num, ZL_StandardTransformID_sparse_num, 26, 202, EI_SPARSE_NUM),
     REGISTER_TRANSFORM(ZL_StandardNodeID_sparse_num_auto, ZL_StandardTransformID_sparse_num, 26, 202, EI_SPARSE_NUM_AUTO),
     REGISTER_TRANSFORM(ZL_StandardNodeID_iwt_int, ZL_StandardTransformID_iwt_int, 27, 203, EI_IWT_INT),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_bitplane_split, ZL_StandardTransformID_bitplane_split, 27, 203, EI_BITPLANE_SPLIT),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_quars, ZL_StandardTransformID_quars, 27, 204, EI_QUARS_INT),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_morton_3d, ZL_StandardTransformID_morton_3d, 27, 203, EI_MORTON_3D),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_linear_predict, ZL_StandardTransformID_linear_predict, 27, 204, EI_LINEAR_PREDICT),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_spherical_range, ZL_StandardTransformID_spherical_range, 27, 204, EI_SPHERICAL_RANGE),
 
     // Private Nodes
     REGISTER_TRANSFORM(ZL_PrivateStandardNodeID_set_string_lens,           ZL_StandardTransformID_convert_serial_string, 10, 200, EI_SETSTRINGLENS),
@@ -167,6 +181,8 @@ const CNode ER_standardNodes[STANDARD_ENCODERS_NB] = {
     REGISTER_TRANSFORM(ZL_PrivateStandardNodeID_lz4, ZL_StandardTransformID_lz4, 23, 200, EI_LZ4),
     REGISTER_TRANSFORM(ZL_PrivateStandardNodeID_bitSplit, ZL_StandardTransformID_bitSplit, 24, 200, EI_BITSPLIT),
     REGISTER_TRANSFORM(ZL_PrivateStandardNodeID_pivco_huffman, ZL_StandardTransformID_pivco_huffman, 27, 203, EI_PIVCO_HUFFMAN),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_tans4_interleaved, ZL_StandardTransformID_tans4_interleaved, 3, 200, EI_TANS4_INTERLEAVED),
+    REGISTER_TRANSFORM(ZL_StandardNodeID_octree_occupancy, ZL_StandardTransformID_octree_occupancy, 27, 204, EI_OCTREE_OCCUPANCY),
 
     // Deprecated Nodes
     REGISTER_DEPRECATED_TRANSFORM(ZL_PrivateStandardNodeID_rolz_deprecated, ZL_StandardTransformID_rolz, 3, 12, 200, EI_ROLZ),

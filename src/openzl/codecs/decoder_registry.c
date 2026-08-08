@@ -3,6 +3,7 @@
 #include "openzl/codecs/decoder_registry.h"
 
 #include "openzl/codecs/bitSplit/decode_bitSplit_binding.h"
+#include "openzl/codecs/bitplane_split/decode_bitplane_split_binding.h"
 #include "openzl/codecs/bitpack/decode_bitpack_binding.h"
 #include "openzl/codecs/bitunpack/decode_bitunpack_binding.h"
 #include "openzl/codecs/concat/decode_concat_binding.h"
@@ -13,6 +14,7 @@
 #include "openzl/codecs/dispatchN_byTag/decode_dispatchN_byTag_binding.h"
 #include "openzl/codecs/dispatch_string/decode_dispatch_string_binding.h"
 #include "openzl/codecs/divide_by/decode_divide_by_binding.h"
+#include "openzl/codecs/elf_erase/decode_elf_erase_binding.h"
 #include "openzl/codecs/entropy/decode_entropy_binding.h"
 #include "openzl/codecs/flatpack/decode_flatpack_binding.h"
 #include "openzl/codecs/float_deconstruct/decode_float_deconstruct_binding.h"
@@ -20,24 +22,30 @@
 #include "openzl/codecs/iwt/decode_iwt_binding.h"
 #include "openzl/codecs/lz/decode_lz_binding.h"
 #include "openzl/codecs/lz/graph_lz.h"
+#include "openzl/codecs/linear_predict/decode_linear_predict_binding.h"
 #include "openzl/codecs/lz4/decode_lz4_binding.h"
 #include "openzl/codecs/merge_sorted/decode_merge_sorted_binding.h"
+#include "openzl/codecs/morton_3d/decode_morton_3d_binding.h"
 #include "openzl/codecs/mux_lengths/decode_mux_lengths_binding.h"
 #include "openzl/codecs/mux_lengths/graph_mux_lengths.h"
+#include "openzl/codecs/octree_occupancy/decode_octree_occupancy_binding.h"
 #include "openzl/codecs/parse_int/decode_parse_int_binding.h"
 #include "openzl/codecs/parse_int/graph_parse_int.h"
 #include "openzl/codecs/partition/decode_partition_binding.h"
 #include "openzl/codecs/partition/decode_partition_bitpack_fusion.h"
 #include "openzl/codecs/pivco_huffman/decode_pivco_binding.h"
 #include "openzl/codecs/pcodec/decode_pcodec_binding.h"
+#include "openzl/codecs/quars/decode_quars_binding.h"
 #include "openzl/codecs/prefix/decode_prefix_binding.h"
 #include "openzl/codecs/quantize/decode_quantize_binding.h"
 #include "openzl/codecs/range_pack/decode_range_pack_binding.h"
 #include "openzl/codecs/rolz/decode_rolz_binding.h"
 #include "openzl/codecs/sentinel/decode_sentinel_binding.h"
 #include "openzl/codecs/sparse_num/decode_sparse_num_binding.h"
+#include "openzl/codecs/spherical_range/decode_spherical_range_binding.h"
 #include "openzl/codecs/splitByStruct/decode_splitByStruct_binding.h"
 #include "openzl/codecs/splitN/decode_splitN_binding.h"
+#include "openzl/codecs/tans4_interleaved/decode_tans4_interleaved_binding.h"
 #include "openzl/codecs/tokenize/decode_tokenize_binding.h"
 #include "openzl/codecs/transpose/decode_transpose_binding.h"
 #include "openzl/codecs/zigzag/decode_zigzag_binding.h"
@@ -144,6 +152,14 @@ const StandardDTransform SDecoders_array[ZL_StandardTransformID_end] = {
     REGISTER_TTRANSFORM_G(ZL_StandardTransformID_pivco_huffman, 27, DI_PIVCO_HUFFMAN, PIVCO_HUFFMAN_GRAPH),
     REGISTER_TTRANSFORM_G(ZL_StandardTransformID_iwt_int, 27, DI_IWT_INT, IWT_GRAPH),
     REGISTER_TTRANSFORM_G(ZL_StandardTransformID_pcodec_int, 27, DI_PCODEC_INT, PCODEC_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_bitplane_split, 27, DI_BITPLANE_SPLIT, BITPLANE_SPLIT_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_morton_3d, 27, DI_MORTON_3D, MORTON_3D_DECODE_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_quars, 27, DI_QUARS_INT, NUMPIPE_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_linear_predict, 27, DI_LINEAR_PREDICT, NUMPIPE_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_elf_erase, 27, DI_ELF_ERASE, ELF_ERASE_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_tans4_interleaved, 3, DI_TANS4_INTERLEAVED, PIPE_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_spherical_range, 27, DI_SPHERICAL_RANGE, SPHERICAL_RANGE_GRAPH),
+    REGISTER_TTRANSFORM_G(ZL_StandardTransformID_octree_occupancy, 27, DI_OCTREE_OCCUPANCY, PIPE_GRAPH),
 
     REGISTER_VOTRANSFORM_G(ZL_StandardTransformID_splitn, 9, DI_SPLITN, GRAPH_VO_SERIAL),
     REGISTER_VOTRANSFORM_G(ZL_StandardTransformID_splitn_struct, 14, DI_SPLITN_STRUCT, GRAPH_VO_STRUCT),
