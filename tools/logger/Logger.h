@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <iostream>
+#include <mutex>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -38,6 +39,7 @@ class Logger {
 
     int global_verbosity;      // TODO where to set this by default?
     bool progress_line_active; // Track if we have an active progress line
+    std::mutex logMutex_;
 
     // Store current progress information for re-printing
     LogLevel progress_level;
@@ -90,6 +92,7 @@ class Logger {
     static void log(LogLevel level, const Args&... args)
     {
         if (shouldLog(level)) {
+            std::lock_guard<std::mutex> lock(instance().logMutex_);
             finalizeProgressIfActive();
             log_inner(std::cerr, args...);
             std::cerr << '\n';
@@ -105,6 +108,7 @@ class Logger {
             return;
         }
 
+        std::lock_guard<std::mutex> lock(instance().logMutex_);
         finalizeProgressIfActive();
 
 #pragma GCC diagnostic push
@@ -124,6 +128,7 @@ class Logger {
             return;
         }
 
+        std::lock_guard<std::mutex> lock(instance().logMutex_);
         // Move to beginning of line
         // TODO remove control characters when printing to non-tty
         fprintf(stderr, "\r");

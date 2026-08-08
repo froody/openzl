@@ -60,13 +60,38 @@ std::string trainBackend(
         params.populationSize = trainParams.populationSize.value();
     }
     AutomatedCompressorExplorer ace(flattened, params);
+    auto startTime = std::chrono::steady_clock::now();
     for (;;) {
+        float const progress = ace.progress();
+        auto const now = std::chrono::steady_clock::now();
+        auto const elapsedSecs =
+                std::chrono::duration_cast<std::chrono::seconds>(now - startTime)
+                        .count();
+
+        std::string etaStr = "";
+        if (progress > 0.01f && elapsedSecs > 1) {
+            double const totalEstSecs =
+                    static_cast<double>(elapsedSecs) / static_cast<double>(progress);
+            double const remainingSecs = totalEstSecs - static_cast<double>(elapsedSecs);
+            if (remainingSecs > 0) {
+                int const remMin = static_cast<int>(remainingSecs) / 60;
+                int const remSec = static_cast<int>(remainingSecs) % 60;
+                if (remMin > 0) {
+                    etaStr = " (ETA: " + std::to_string(remMin) + "m "
+                            + std::to_string(remSec) + "s)";
+                } else {
+                    etaStr = " (ETA: " + std::to_string(remSec) + "s)";
+                }
+            }
+        }
+
         Logger::logProgress(
                 INFO,
-                ace.progress(),
-                "Training ACE graph %u / %u: ACE progress",
+                progress,
+                "Training ACE graph %zu / %zu%s: ACE progress",
                 graphIdx,
-                numGraphs);
+                numGraphs,
+                etaStr.c_str());
         if (ace.finished()) {
             break;
         }
@@ -115,10 +140,15 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
 
     std::unordered_map<std::string, LocalParams> paramsToReplace;
 
-    size_t graphIdx        = 0;
+    struct GraphTask {
+        size_t graphIdx;
+        std::string backendGraph;
+    };
+    std::vector<GraphTask> activeGraphTasks;
+    size_t totalGraphIdx   = 0;
     const size_t numGraphs = autoBackendGraphs.size();
     for (const auto& backendGraph : autoBackendGraphs) {
-        ++graphIdx;
+        ++totalGraphIdx;
         // Skip graphs with no training samples (e.g., optional fields that
         // aren't present in the training data). These will use default
         // compression.
@@ -126,7 +156,7 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
             Logger::log(
                     VERBOSE1,
                     "Skipping ACE graph ",
-                    graphIdx,
+                    totalGraphIdx,
                     " / ",
                     numGraphs,
                     " (",
@@ -134,8 +164,69 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
                     "): no training samples");
             continue;
         }
-        auto aceState = trainBackend(
-                samples[backendGraph], trainParams, graphIdx, numGraphs);
+        activeGraphTasks.push_back({ totalGraphIdx, backendGraph });
+    }
+
+    if (activeGraphTasks.empty()) {
+        checkPoint_.emplace(compressor.serialize());
+        return getCombinedCompressors(inputs, *checkPoint_, trainParams);
+    }
+
+    size_t const totalRequestedThreads = trainParams.threads.value_or(
+            std::thread::hardware_concurrency());
+    size_t const numActiveGraphs = activeGraphTasks.size();
+
+    // Divide total requested threads across concurrent graphs
+    size_t const threadsPerGraph =
+            std::max<size_t>(1, totalRequestedThreads / numActiveGraphs);
+
+    std::vector<std::string> aceStates(numActiveGraphs);
+
+    if (numActiveGraphs == 1) {
+        aceStates[0] = trainBackend(
+                samples[activeGraphTasks[0].backendGraph],
+                trainParams,
+                activeGraphTasks[0].graphIdx,
+                numGraphs);
+    } else {
+        Logger::log(
+                INFO,
+                "Training ",
+                numActiveGraphs,
+                " ACE graphs in parallel (",
+                threadsPerGraph,
+                " threads/graph, ",
+                totalRequestedThreads,
+                " total threads)...");
+
+        ThreadPool graphPool(numActiveGraphs);
+        std::vector<std::future<std::string>> futures;
+        futures.reserve(numActiveGraphs);
+
+        for (size_t i = 0; i < numActiveGraphs; ++i) {
+            TrainParams graphParams = trainParams;
+            graphParams.threads     = threadsPerGraph;
+
+            auto const& task = activeGraphTasks[i];
+            futures.emplace_back(graphPool.run(
+                    [&samples, graphParams, task, numGraphs]() {
+                        return trainBackend(
+                                samples[task.backendGraph],
+                                graphParams,
+                                task.graphIdx,
+                                numGraphs);
+                    }));
+        }
+
+        for (size_t i = 0; i < numActiveGraphs; ++i) {
+            aceStates[i] = futures[i].get();
+        }
+    }
+
+    for (size_t i = 0; i < activeGraphTasks.size(); ++i) {
+        const auto& backendGraph = activeGraphTasks[i].backendGraph;
+        const auto& aceState     = aceStates[i];
+
         auto localParams = LocalParams();
         localParams.addCopyParam(
                 AutomatedCompressorExplorer::kAceStateParamId,
