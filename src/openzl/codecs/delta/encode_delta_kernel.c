@@ -97,7 +97,12 @@ void ZS_deltaEncode8(
     *first = src[0];
 
 #if OPENZL_HAS_CUDA
-    if (nelts >= 65536) {
+    static int gpu_enabled = -1;
+    if (gpu_enabled == -1) {
+        char const* env = getenv("OPENZL_USE_GPU");
+        gpu_enabled = (env && atoi(env) > 0) ? 1 : 0;
+    }
+    if (gpu_enabled && nelts >= 65536) {
         static _Thread_local cudaStream_t tls_stream = NULL;
         if (!tls_stream) {
             cudaStreamCreateWithFlags(&tls_stream, cudaStreamNonBlocking);

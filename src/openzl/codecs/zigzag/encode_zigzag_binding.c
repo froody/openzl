@@ -27,7 +27,12 @@ ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
     ZL_ASSERT(numWidth == 1 || numWidth == 2 || numWidth == 4 || numWidth == 8);
 
 #if OPENZL_HAS_CUDA
-    if (nbInts >= 65536) {
+    static int gpu_enabled = -1;
+    if (gpu_enabled == -1) {
+        char const* env = getenv("OPENZL_USE_GPU");
+        gpu_enabled = (env && atoi(env) > 0) ? 1 : 0;
+    }
+    if (gpu_enabled && nbInts >= 65536) {
         static _Thread_local cudaStream_t tls_stream = NULL;
         if (!tls_stream) {
             cudaStreamCreateWithFlags(&tls_stream, cudaStreamNonBlocking);
