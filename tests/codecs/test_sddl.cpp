@@ -886,7 +886,8 @@ TEST_F(SimpleDataDescriptionLanguageSourceCodePrettyPrintingTest, RandomStrings)
                                                          alphabet.size() - 1 };
     for (size_t i = 0; i < 10000; i++) {
         std::string src;
-        const auto src_len = std::uniform_int_distribution{ 0, 1000 }(randgen);
+        const auto src_len =
+                std::uniform_int_distribution<size_t>{ 0, 1000 }(randgen);
         src.reserve(src_len);
         for (size_t j = 0; j < src_len; j++) {
             src += alphabet[alphabet_dist(randgen)];
@@ -897,7 +898,7 @@ TEST_F(SimpleDataDescriptionLanguageSourceCodePrettyPrintingTest, RandomStrings)
                 arena_, &sc, StringView_init(src.data(), src.size()));
 
         ZL_SDDL_SourceLocation sl;
-        sl.start = std::uniform_int_distribution{ 0, src_len }(randgen);
+        sl.start = std::uniform_int_distribution<size_t>{ 0, src_len }(randgen);
         sl.size =
                 std::uniform_int_distribution<size_t>{ 0, src_len - sl.start }(
                         randgen);

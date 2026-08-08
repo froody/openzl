@@ -77,7 +77,7 @@ class AssertEqVOFunctionGraph : public FunctionGraph {
 
    private:
     const std::vector<const Input*>& expected_;
-    mutable int callIndex_;
+    mutable size_t callIndex_;
 };
 
 class CodecTest : public testing::Test {
