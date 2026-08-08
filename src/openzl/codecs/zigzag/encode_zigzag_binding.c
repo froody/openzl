@@ -4,10 +4,101 @@
 #include "openzl/codecs/zigzag/encode_zigzag_kernel.h" // ZS_zigzagEncodeXX
 #include "openzl/common/assertion.h"
 
-#if OPENZL_HAS_CUDA
+#if defined(OPENZL_HAS_CUDA) && OPENZL_HAS_CUDA
 #    include <cuda_runtime.h>
 #    include "openzl/codecs/gpu/encode_zigzag_gpu.h"
-#endif
+#    include "openzl/codecs/gpu/gpu_dispatch.h"
+
+static cudaError_t zigzagEncode_gpu(
+        void* d_dst,
+        void const* d_src,
+        size_t nbInts,
+        size_t numWidth,
+        cudaStream_t stream)
+{
+    switch (numWidth) {
+        case 1:
+            return ZL_zigzagEncode8_gpu(
+                    (uint8_t*)d_dst, (int8_t const*)d_src, nbInts, stream);
+        case 2:
+            return ZL_zigzagEncode16_gpu(
+                    (uint16_t*)d_dst, (int16_t const*)d_src, nbInts, stream);
+        case 4:
+            return ZL_zigzagEncode32_gpu(
+                    (uint32_t*)d_dst, (int32_t const*)d_src, nbInts, stream);
+        case 8:
+            return ZL_zigzagEncode64_gpu(
+                    (uint64_t*)d_dst, (int64_t const*)d_src, nbInts, stream);
+        default:
+            // Unreachable: callers filter widths via zigzagWidthHasGpuKernel().
+            return cudaErrorInvalidValue;
+    }
+}
+
+static bool zigzagWidthHasGpuKernel(size_t numWidth)
+{
+    return numWidth == 1 || numWidth == 2 || numWidth == 4 || numWidth == 8;
+}
+
+/// Zigzag-encodes @nbInts elements of @src into @dst on the GPU.
+/// Returns false without touching @dst if the payload is not worth offloading
+/// or if any step failed, in which case the caller must run the CPU kernel.
+static bool zigzagEncodeOnGpu(
+        void* dst,
+        void const* src,
+        size_t nbInts,
+        size_t numWidth)
+{
+    if (!ZL_GPU_enabled() || nbInts < ZL_GPU_MIN_NB_ELTS
+        || !zigzagWidthHasGpuKernel(numWidth)) {
+        return false;
+    }
+    cudaStream_t const stream = ZL_GPU_stream();
+    if (stream == NULL) {
+        return false;
+    }
+
+    size_t const bytes = nbInts * numWidth;
+    void* d_src        = NULL;
+    void* d_dst        = NULL;
+
+    cudaError_t err = cudaMallocAsync(&d_src, bytes, stream);
+    if (err == cudaSuccess) {
+        err = cudaMallocAsync(&d_dst, bytes, stream);
+    }
+    if (err == cudaSuccess) {
+        err = cudaMemcpyAsync(
+                d_src, src, bytes, cudaMemcpyHostToDevice, stream);
+    }
+    if (err == cudaSuccess) {
+        err = zigzagEncode_gpu(d_dst, d_src, nbInts, numWidth, stream);
+    }
+    if (err == cudaSuccess) {
+        err = cudaMemcpyAsync(
+                dst, d_dst, bytes, cudaMemcpyDeviceToHost, stream);
+    }
+    if (err == cudaSuccess) {
+        // Nothing may be read out of @dst before this returns, and this is
+        // also where asynchronous failures (a failed launch, a stream-ordered
+        // allocation that could not be honoured) are finally reported.
+        err = cudaStreamSynchronize(stream);
+    }
+
+    // Frees are stream-ordered and must happen on every path, including the
+    // failing ones, or the memory pool grows until the device is exhausted.
+    if (d_src != NULL) {
+        cudaFreeAsync(d_src, stream);
+    }
+    if (d_dst != NULL) {
+        cudaFreeAsync(d_dst, stream);
+    }
+
+    if (err != cudaSuccess) {
+        return ZL_GPU_failed(err, "zigzag GPU encode");
+    }
+    return ZL_GPU_succeeded();
+}
+#endif // OPENZL_HAS_CUDA
 
 // ZL_TypedEncoderFn
 ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
@@ -26,45 +117,11 @@ ZL_Report EI_zigzag_num(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
     ZL_ERR_IF_NULL(out, allocation);
     ZL_ASSERT(numWidth == 1 || numWidth == 2 || numWidth == 4 || numWidth == 8);
 
-#if OPENZL_HAS_CUDA
-    static int gpu_enabled = -1;
-    if (gpu_enabled == -1) {
-        char const* env = getenv("OPENZL_USE_GPU");
-        gpu_enabled = (env && atoi(env) > 0) ? 1 : 0;
-    }
-    if (gpu_enabled && nbInts >= 65536) {
-        static _Thread_local cudaStream_t tls_stream = NULL;
-        if (!tls_stream) {
-            cudaStreamCreateWithFlags(&tls_stream, cudaStreamNonBlocking);
-        }
-        void const* src = ZL_Input_ptr(in);
-        void* dst       = ZL_Output_ptr(out);
-        void *d_src = NULL, *d_dst = NULL;
-        size_t const bytes = nbInts * numWidth;
-        if (cudaMallocAsync(&d_src, bytes, tls_stream) == cudaSuccess &&
-            cudaMallocAsync(&d_dst, bytes, tls_stream) == cudaSuccess) {
-            cudaMemcpyAsync(d_src, src, bytes, cudaMemcpyHostToDevice, tls_stream);
-            switch (numWidth) {
-                case 1:
-                    ZL_zigzagEncode8_gpu((uint8_t*)d_dst, (int8_t const*)d_src, nbInts, tls_stream);
-                    break;
-                case 2:
-                    ZL_zigzagEncode16_gpu((uint16_t*)d_dst, (int16_t const*)d_src, nbInts, tls_stream);
-                    break;
-                case 4:
-                    ZL_zigzagEncode32_gpu((uint32_t*)d_dst, (int32_t const*)d_src, nbInts, tls_stream);
-                    break;
-                case 8:
-                    ZL_zigzagEncode64_gpu((uint64_t*)d_dst, (int64_t const*)d_src, nbInts, tls_stream);
-                    break;
-            }
-            cudaMemcpyAsync(dst, d_dst, bytes, cudaMemcpyDeviceToHost, tls_stream);
-            cudaFreeAsync(d_src, tls_stream);
-            cudaFreeAsync(d_dst, tls_stream);
-            cudaStreamSynchronize(tls_stream);
-            ZL_ERR_IF_ERR(ZL_Output_commit(out, nbInts));
-            return ZL_returnValue(1);
-        }
+#if defined(OPENZL_HAS_CUDA) && OPENZL_HAS_CUDA
+    if (zigzagEncodeOnGpu(
+                ZL_Output_ptr(out), ZL_Input_ptr(in), nbInts, numWidth)) {
+        ZL_ERR_IF_ERR(ZL_Output_commit(out, nbInts));
+        return ZL_returnValue(1);
     }
 #endif
 

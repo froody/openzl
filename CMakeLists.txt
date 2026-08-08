@@ -167,6 +167,17 @@ if(OPENZL_ENABLE_CUDA)
     endif()
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 17)
+    # Build for the GPU actually installed on this machine. The previous
+    # hard-coded default (75) only shipped an sm_75 cubin plus PTX, forcing a
+    # JIT recompile at first launch on any newer card.
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
+        if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+            set(CMAKE_CUDA_ARCHITECTURES native)
+        else()
+            # `native` predates this CMake; let nvcc pick its own default.
+            unset(CMAKE_CUDA_ARCHITECTURES)
+        endif()
+    endif()
     add_compile_definitions(OPENZL_HAS_CUDA=1)
     include_directories(/usr/local/cuda/include /usr/local/cuda-13.1/include)
     list(APPEND sources
