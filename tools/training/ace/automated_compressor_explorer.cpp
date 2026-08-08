@@ -26,6 +26,51 @@ std::vector<ACECompressor> AutomatedCompressorExplorer::initialPopulation()
     return population;
 }
 
+std::unordered_set<ACECompressor> AutomatedCompressorExplorer::reproduce(
+        size_t numChildren)
+{
+    std::unordered_set<ACECompressor> children;
+    size_t maxIterations = 2 * numChildren;
+    std::vector<std::future<ACECompressor>> futures;
+    futures.reserve(maxIterations);
+
+    for (size_t i = 0; i < maxIterations; ++i) {
+        uint64_t seed = rng()();
+        futures.emplace_back(threadPool_.run([this, seed]() -> ACECompressor {
+            std::mt19937_64 childRng(seed);
+            TournamentSelector childSelector(
+                    TournamentSelector::Parameters{ .seed = childRng() });
+
+            auto selectParentLocal = [&]() -> const ACECompressor& {
+                auto idx = childSelector.select(rank(), crowdingDistance());
+                return population()[idx];
+            };
+
+            const auto& p1 = selectParentLocal();
+            const auto& p2 = selectParentLocal();
+
+            ACECrossover crossoverLocal(childRng, inputType());
+            ACEMutate mutateLocal(childRng, inputType());
+
+            auto child = crossoverLocal(p1, p2);
+            std::uniform_real_distribution<float> shouldMutate(0, 1);
+            if (shouldMutate(childRng) < mutationProbability()) {
+                child = mutateLocal(child);
+            }
+            return child;
+        }));
+    }
+
+    for (size_t i = 0; i < maxIterations; ++i) {
+        auto child = futures[i].get();
+        if (children.size() < numChildren
+            && populationSet().count(child) == 0) {
+            children.insert(std::move(child));
+        }
+    }
+    return children;
+}
+
 namespace {
 /// Put small evolutionary pressure on the results to be simpler.
 /// Adjusts cSize on the scale of 0.1%, and times on the scale of 1%, given a

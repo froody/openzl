@@ -80,12 +80,9 @@ ClusterInfo CompressionUtils::getBestClusterInfo(
         }
         auto clusteringCodecIdxs = typeToClusteringCodecIdxsMap_.at(type);
         for (size_t j = 0; j < clusteringCodecIdxs.size(); j++) {
-            SizeTimePair cost{ 0, 0 };
             configBuilder.setClusteringCodec(0, clusteringCodecIdxs[j]);
             auto config = configBuilder.build();
-            for (auto& sample : samples_) {
-                cost = cost + compressSample(config, filter, sample);
-            }
+            SizeTimePair cost = tryCompress(config, filter).get();
             if (cost < bestClusterInfo.cost) {
                 bestClusterInfo = { .successorIdx = i,
                                     .clusteringCodecIdx =

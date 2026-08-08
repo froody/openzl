@@ -2,6 +2,7 @@
 
 #include "tools/training/ace/ace_compressor.h"
 
+#include <future>
 #include <sstream>
 #include <type_traits>
 
@@ -681,13 +682,15 @@ poly::optional<ACECompressionResult> benchmark(
         const Compressor& compressor,
         poly::span<const poly::span<const Input>> inputs)
 {
-    CCtx cctx;
+    if (inputs.empty()) {
+        return ACECompressionResult{};
+    }
 
-    DCtx dctx;
-
-    ACECompressionResult result{};
-    for (const auto& input : inputs) {
-        // TODO: For non-string inputs pre-reserve IO buffers
+    auto benchmarkOne = [&compressor](
+                                poly::span<const Input>
+                                        input) -> poly::optional<ACECompressionResult> {
+        CCtx cctx;
+        DCtx dctx;
         std::string compressed;
         auto cStart = std::chrono::steady_clock::now();
         try {
@@ -720,15 +723,35 @@ poly::optional<ACECompressionResult> benchmark(
             }
         }
 
-        result += ACECompressionResult{
+        return ACECompressionResult{
             .originalSize      = originalSize,
             .compressedSize    = compressed.size(),
             .compressionTime   = cStop - cStart,
             .decompressionTime = dStop - dStart,
         };
+    };
+
+    if (inputs.size() == 1) {
+        return benchmarkOne(inputs[0]);
     }
 
-    return result;
+    std::vector<std::future<poly::optional<ACECompressionResult>>> futures;
+    futures.reserve(inputs.size());
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        futures.emplace_back(
+                std::async(std::launch::async, benchmarkOne, inputs[i]));
+    }
+
+    ACECompressionResult totalResult{};
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        auto res = futures[i].get();
+        if (!res.has_value()) {
+            return poly::nullopt;
+        }
+        totalResult += *res;
+    }
+
+    return totalResult;
 }
 
 poly::optional<ACECompressionResult> benchmark(

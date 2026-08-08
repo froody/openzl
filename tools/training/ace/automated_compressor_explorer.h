@@ -130,6 +130,8 @@ class AutomatedCompressorExplorer : public GeneticAlgorithm<ACECompressor> {
 
     std::vector<ACECompressor> initialPopulation() override;
 
+    std::unordered_set<ACECompressor> reproduce(size_t numChildren) override;
+
     ACECompressor crossover(
             const ACECompressor& parent1,
             const ACECompressor& parent2) override
