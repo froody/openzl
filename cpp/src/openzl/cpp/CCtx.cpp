@@ -6,6 +6,7 @@
 
 #include "openzl/cpp/FunctionGraph.hpp"
 #include "openzl/cpp/experimental/trace/CompressionTraceHooks.hpp"
+#include "openzl/compress/cctx.h"
 #include "openzl/zl_compress.h"
 #include "openzl/zl_compressor.h"
 
@@ -17,6 +18,10 @@ size_t compressBound(size_t totalSize)
 }
 
 CCtx::CCtx() : CCtx(ZL_CCtx_create(), ZL_CCtx_free) {}
+CCtx CCtx::createDerived(const CCtx& original)
+{
+    return CCtx(CCTX_createDerivedCCtx(original.get()), ZL_CCtx_free);
+}
 CCtx::CCtx(ZL_CCtx* cctx, detail::NonNullUniqueCPtr<ZL_CCtx>::DeleterFn deleter)
         : cctx_(cctx, deleter)
 {

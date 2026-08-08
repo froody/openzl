@@ -1,14 +1,15 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
 
-#include <map>
-#include <vector>
+#include <thread>
 
+#include "openzl/compress/cctx.h"
 #include "openzl/cpp/Exception.hpp"
 #include "openzl/zl_compress.h"
 
 #include "tools/logger/Logger.h"
 #include "tools/training/sample_collection/introspection_hooks.h"
 #include "tools/training/sample_collection/training_sample_collector.h"
+#include "tools/training/utils/thread_pool.h"
 
 namespace openzl::training {
 
@@ -49,26 +50,75 @@ std::map<std::string, std::vector<MultiInput>> collectInputStreams(
 
     std::map<std::string, std::vector<MultiInput>> result;
 
-    for (const auto& mi : inputs) {
-        SampleCollectionHook hooks(graphNames, nodeNames);
-        openzl::unwrap(
-                ZL_CCtx_attachIntrospectionHooks(
-                        cctx.get(), hooks.getRawHooks()),
-                "Failed to attach introspection hooks",
-                cctx.get());
+    if (inputs.size() <= 1) {
+        for (const auto& mi : inputs) {
+            SampleCollectionHook hooks(graphNames, nodeNames);
+            openzl::unwrap(
+                    ZL_CCtx_attachIntrospectionHooks(
+                            cctx.get(), hooks.getRawHooks()),
+                    "Failed to attach introspection hooks",
+                    cctx.get());
 
-        cctx.compress(*mi);
+            cctx.compress(*mi);
 
-        for (const auto& [name, samples] : hooks.getInputs()) {
-            for (auto& sample : samples) {
-                result[name].push_back(sample);
+            for (auto& [name, samples] : hooks.getInputs()) {
+                for (auto& sample : samples) {
+                    result[name].push_back(std::move(sample));
+                }
             }
+
+            openzl::unwrap(
+                    ZL_CCtx_detachAllIntrospectionHooks(cctx.get()),
+                    "Failed to detach introspection hooks",
+                    cctx.get());
+        }
+    } else {
+        size_t numThreads = std::min<size_t>(
+                inputs.size(), std::thread::hardware_concurrency());
+        if (numThreads < 1) {
+            numThreads = 1;
+        }
+        ThreadPool pool(numThreads);
+
+        std::vector<std::future<std::map<std::string, std::vector<MultiInput>>>>
+                futures;
+        futures.reserve(inputs.size());
+
+        for (size_t i = 0; i < inputs.size(); ++i) {
+            futures.emplace_back(pool.run([&cctx,
+                                           &graphNames,
+                                           &nodeNames,
+                                           &inputs,
+                                           i]() {
+                CCtx threadCctx = CCtx::createDerived(cctx);
+                SampleCollectionHook hooks(graphNames, nodeNames);
+                openzl::unwrap(
+                        ZL_CCtx_attachIntrospectionHooks(
+                                threadCctx.get(), hooks.getRawHooks()),
+                        "Failed to attach introspection hooks",
+                        threadCctx.get());
+
+                threadCctx.compress(*inputs[i]);
+
+                auto captured = hooks.getInputs();
+
+                openzl::unwrap(
+                        ZL_CCtx_detachAllIntrospectionHooks(threadCctx.get()),
+                        "Failed to detach introspection hooks",
+                        threadCctx.get());
+
+                return captured;
+            }));
         }
 
-        openzl::unwrap(
-                ZL_CCtx_detachAllIntrospectionHooks(cctx.get()),
-                "Failed to detach introspection hooks",
-                cctx.get());
+        for (auto& future : futures) {
+            auto sampleMap = future.get();
+            for (auto& [name, samples] : sampleMap) {
+                for (auto& sample : samples) {
+                    result[name].push_back(std::move(sample));
+                }
+            }
+        }
     }
 
     return result;

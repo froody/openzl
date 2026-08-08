@@ -32,6 +32,8 @@ class CCtx {
      */
     CCtx();
 
+    static CCtx createDerived(const CCtx& original);
+
     CCtx(const CCtx&) = delete;
     // Can't be declared default in the header because the forward-declared
     // CompressionTraceHooks is an incomplete type here.
