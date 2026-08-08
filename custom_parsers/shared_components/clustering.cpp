@@ -5,9 +5,20 @@
 #include "custom_parsers/shared_components/string_graphs.h"
 #include "openzl/compress/graphs/generic_clustering_graph.h"
 
+#include "openzl/codecs/zl_bitplane_split.h"
+#include "openzl/codecs/zl_elf_erase.h"
+#include "openzl/codecs/zl_iwt.h"
+#include "openzl/codecs/zl_linear_predict.h"
+#include "openzl/codecs/zl_morton_3d.h"
+#include "openzl/codecs/zl_octree_occupancy.h"
+#include "openzl/codecs/zl_pcodec.h"
+#include "openzl/codecs/zl_quars.h"
+#include "openzl/codecs/zl_spherical_range.h"
+#include "openzl/codecs/zl_tans4_interleaved.h"
+
 ZL_GraphID ZS2_createGraph_genericClustering(ZL_Compressor* compressor)
 {
-    static const size_t NUM_SUCCESSORS          = 9;
+    static const size_t NUM_SUCCESSORS          = 19;
     const ZL_GraphID successors[NUM_SUCCESSORS] = {
         ZL_GRAPH_STORE,
         ZL_GRAPH_FIELD_LZ,
@@ -18,7 +29,27 @@ ZL_GraphID ZS2_createGraph_genericClustering(ZL_Compressor* compressor)
         openzl::custom_parsers::ZL_Compressor_registerTokenizeSorted(
                 compressor),
         openzl::custom_parsers::ZL_Compressor_registerDeltaFieldLZ(compressor),
-        openzl::custom_parsers::ZL_Compressor_registerStringTokenize(compressor)
+        openzl::custom_parsers::ZL_Compressor_registerStringTokenize(compressor),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_MORTON_3D, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_SPHERICAL_RANGE, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_QUARS_INT, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_ELF_ERASE, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_BITPLANE_SPLIT, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_OCTREE_OCCUPANCY, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_LINEAR_PREDICT, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_TANS4_INTERLEAVED, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_IWT_INT, ZL_GRAPH_FIELD_LZ),
+        ZL_Compressor_registerStaticGraph_fromNode1o(
+                compressor, ZL_NODE_PCODEC_INT, ZL_GRAPH_FIELD_LZ)
     };
 
     ZL_ClusteringConfig config = {};
