@@ -8,6 +8,7 @@
 #include "openzl/common/a1cbor_helpers.h"
 #include "openzl/common/allocation.h"
 #include "openzl/shared/a1cbor.h"
+#include "tools/training/ace/ace_prefix_evaluator.h"
 
 namespace openzl {
 namespace training {
@@ -135,38 +136,58 @@ std::vector<std::vector<float>> AutomatedCompressorExplorer::computeFitness(
     totalCandidates_     = genes.size();
     completedCandidates_ = 0;
 
-    std::vector<std::future<std::vector<float>>> futures;
-    futures.reserve(genes.size());
-    for (const auto& gene : genes) {
-        auto cache = cachedFitness_.find(gene.hash());
+    // Check fitness cache first for known candidate hashes
+    std::vector<poly::optional<std::vector<float>>> cachedResults(genes.size(), poly::nullopt);
+    std::vector<size_t> uncachedIndices;
+
+    for (size_t i = 0; i < genes.size(); ++i) {
+        auto cache = cachedFitness_.find(genes[i].hash());
         if (cache != cachedFitness_.end()) {
             std::uniform_int_distribution<size_t> dist(0, cache->second.first);
             if (dist(rng()) != 0) {
-                std::promise<std::vector<float>> promise;
-                promise.set_value(cache->second.second);
-                futures.emplace_back(promise.get_future());
+                cachedResults[i] = cache->second.second;
                 continue;
             }
         }
-        futures.emplace_back(threadPool_.run([&inputs = inputs_, &gene] {
-            return computeFitness(gene, inputs);
-        }));
+        uncachedIndices.push_back(i);
     }
 
-    std::vector<std::vector<float>> results;
-    results.reserve(genes.size());
+    // Evaluate uncached candidates via prefix-tree work sharing
+    std::vector<ACECompressor> uncachedGenes;
+    uncachedGenes.reserve(uncachedIndices.size());
+    for (auto idx : uncachedIndices) {
+        uncachedGenes.push_back(genes[idx]);
+    }
+
+    auto evalResults = ACEPrefixEvaluator::evaluatePopulation(uncachedGenes, inputs_, threadPool_);
+
+    std::vector<std::vector<float>> results(genes.size());
+    size_t uncachedIdx = 0;
+
     for (size_t i = 0; i < genes.size(); ++i) {
-        auto result            = futures[i].get();
-        auto [cache, inserted] = cachedFitness_.emplace(
-                genes[i].hash(), std::make_pair(1, result));
-        if (!inserted) {
-            for (size_t j = 0; j < result.size(); ++j) {
-                cache->second.second[j] =
-                        std::min(cache->second.second[j], result[j]);
+        if (cachedResults[i].has_value()) {
+            results[i] = *cachedResults[i];
+        } else {
+            const auto& res = evalResults[uncachedIdx++];
+            std::vector<float> fitness(3, std::numeric_limits<float>::infinity());
+            if (res.has_value()) {
+                fitness[0] = res->compressedSize;
+                fitness[1] = res->compressionTime.count();
+                fitness[2] = res->decompressionTime.count();
+                adjustResults(genes[i], fitness);
             }
-            ++cache->second.first;
+            results[i] = fitness;
+
+            auto [cache, inserted] = cachedFitness_.emplace(
+                    genes[i].hash(), std::make_pair(1, fitness));
+            if (!inserted) {
+                for (size_t j = 0; j < fitness.size(); ++j) {
+                    cache->second.second[j] =
+                            std::min(cache->second.second[j], fitness[j]);
+                }
+                ++cache->second.first;
+            }
         }
-        results.push_back(std::move(result));
         completedCandidates_++;
         if (progressCallback_) {
             progressCallback_(static_cast<float>(progress()));

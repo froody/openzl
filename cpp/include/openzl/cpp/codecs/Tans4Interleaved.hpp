@@ -15,7 +15,7 @@ class Tans4Interleaved : public SimplePipeNode<Tans4Interleaved> {
 
     static constexpr NodeMetadata<1, 1> metadata = {
         .inputs           = { InputMetadata{ .type = Type::Numeric, .name = "symbols" } },
-        .singletonOutputs = { OutputMetadata{ .type = Type::Numeric,
+        .singletonOutputs = { OutputMetadata{ .type = Type::Serial,
                                               .name = "tans_substreams" } },
         .description = "4-Way interleaved tANS entropy coder transform"
     };

@@ -193,14 +193,11 @@ std::vector<ACECompressor> makePrebuiltNumericCompressors()
             buildNode(nodes::QuantizeOffsets{}), { fse, store });
     ACECompressor quantizeLengths(
             buildNode(nodes::QuantizeOffsets{}), { fse, store });
-    ACECompressor mortonFieldLz(buildNode(nodes::Morton3D{}), { fieldLz });
-    ACECompressor sphericalFieldLz(buildNode(nodes::SphericalRange{}), { fieldLz });
-    ACECompressor quarsFieldLz(buildNode(nodes::QuaRsInt{}), { fieldLz });
-    ACECompressor elfFieldLz(buildNode(nodes::ElfErase{}), { fieldLz });
+    ACECompressor quarsZstd(buildNode(nodes::QuaRsInt{}), { zstd });
+    ACECompressor elfZstd(buildNode(nodes::ElfErase{}), { zstd });
     ACECompressor bitplaneFieldLz(buildNode(nodes::BitplaneSplit{}), { fieldLz, fieldLz });
-    ACECompressor octreeFieldLz(buildNode(nodes::OctreeOccupancy{}), { fieldLz });
     ACECompressor linearPredictFieldLz(buildNode(nodes::LinearPredict{}), { fieldLz });
-    ACECompressor tans4FieldLz(buildNode(nodes::Tans4Interleaved{}), { fieldLz });
+    ACECompressor tans4Zstd(buildNode(nodes::Tans4Interleaved{}), { zstd });
 
     std::vector<ACECompressor> prebuilt = {
         fieldLz,
@@ -222,14 +219,11 @@ std::vector<ACECompressor> makePrebuiltNumericCompressors()
         bf16Decon,
         quantizeOffsets,
         quantizeLengths,
-        mortonFieldLz,
-        sphericalFieldLz,
-        quarsFieldLz,
-        elfFieldLz,
+        quarsZstd,
+        elfZstd,
         bitplaneFieldLz,
-        octreeFieldLz,
         linearPredictFieldLz,
-        tans4FieldLz,
+        tans4Zstd,
     };
     compressors.insert(compressors.end(), prebuilt.begin(), prebuilt.end());
     return compressors;
@@ -248,7 +242,7 @@ std::vector<ACECompressor> makePrebuiltStructCompressors()
             buildNode(nodes::TokenizeStruct{}), { transpose, fieldLz });
     ACECompressor mortonStruct(buildNode(nodes::Morton3D{}), { fieldLz });
     ACECompressor sphericalStruct(buildNode(nodes::SphericalRange{}), { fieldLz });
-    ACECompressor octreeStruct(buildNode(nodes::OctreeOccupancy{}), { fieldLz });
+    ACECompressor octreeStruct(buildNode(nodes::OctreeOccupancy{}), { zstd });
 
     compressors.push_back(zstd);
     compressors.push_back(transpose);

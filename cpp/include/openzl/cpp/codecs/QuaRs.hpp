@@ -15,7 +15,7 @@ class QuaRsInt : public SimplePipeNode<QuaRsInt> {
 
     static constexpr NodeMetadata<1, 1> metadata = {
         .inputs           = { InputMetadata{ .type = Type::Numeric, .name = "integers" } },
-        .singletonOutputs = { OutputMetadata{ .type = Type::Numeric,
+        .singletonOutputs = { OutputMetadata{ .type = Type::Serial,
                                               .name = "reshaped" } },
         .description = "QuaRs integer distribution reshaping transform"
     };

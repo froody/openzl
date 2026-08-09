@@ -15,7 +15,7 @@ class OctreeOccupancy : public SimplePipeNode<OctreeOccupancy> {
 
     static constexpr NodeMetadata<1, 1> metadata = {
         .inputs           = { InputMetadata{ .type = Type::Struct, .name = "xyz" } },
-        .singletonOutputs = { OutputMetadata{ .type = Type::Numeric,
+        .singletonOutputs = { OutputMetadata{ .type = Type::Serial,
                                               .name = "occupancy" } },
         .description = "Octree occupancy byte-mask encoding transform"
     };

@@ -15,7 +15,7 @@ class ElfErase : public SimplePipeNode<ElfErase> {
 
     static constexpr NodeMetadata<1, 1> metadata = {
         .inputs           = { InputMetadata{ .type = Type::Numeric, .name = "floats" } },
-        .singletonOutputs = { OutputMetadata{ .type = Type::Numeric,
+        .singletonOutputs = { OutputMetadata{ .type = Type::Serial,
                                               .name = "erased" } },
         .description = "Elf* adaptive bit-erasing float transform"
     };
