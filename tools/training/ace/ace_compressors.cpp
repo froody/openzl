@@ -6,8 +6,18 @@
 #include "openzl/zl_reflection.h"
 #include "tools/training/ace/ace_sampling.h"
 
+#include "openzl/cpp/codecs/Bitpack.hpp"
+#include "openzl/cpp/codecs/BitplaneSplit.hpp"
 #include "openzl/cpp/codecs/Bitsplit.hpp"
+#include "openzl/cpp/codecs/ElfErase.hpp"
 #include "openzl/cpp/codecs/Iwt.hpp"
+#include "openzl/cpp/codecs/LinearPredict.hpp"
+#include "openzl/cpp/codecs/Morton3D.hpp"
+#include "openzl/cpp/codecs/OctreeOccupancy.hpp"
+#include "openzl/cpp/codecs/Pcodec.hpp"
+#include "openzl/cpp/codecs/QuaRs.hpp"
+#include "openzl/cpp/codecs/SphericalRange.hpp"
+#include "openzl/cpp/codecs/Tans4Interleaved.hpp"
 
 namespace openzl {
 namespace training {
@@ -71,6 +81,14 @@ std::vector<ACENode> makeAllNodes()
     n.push_back(buildNode(nodes::DeltaInt{}));
     n.push_back(buildNode(nodes::IwtInt{}));
     n.push_back(buildNode(nodes::PcodecInt{}));
+    n.push_back(buildNode(nodes::Morton3D{}));
+    n.push_back(buildNode(nodes::SphericalRange{}));
+    n.push_back(buildNode(nodes::QuaRsInt{}));
+    n.push_back(buildNode(nodes::ElfErase{}));
+    n.push_back(buildNode(nodes::BitplaneSplit{}));
+    n.push_back(buildNode(nodes::OctreeOccupancy{}));
+    n.push_back(buildNode(nodes::LinearPredict{}));
+    n.push_back(buildNode(nodes::Tans4Interleaved{}));
     n.push_back(buildNode(nodes::TokenizeStruct{}));
     for (auto sorted : { true, false }) {
         n.push_back(buildNode(nodes::TokenizeNumeric{ sorted }));
@@ -175,6 +193,15 @@ std::vector<ACECompressor> makePrebuiltNumericCompressors()
             buildNode(nodes::QuantizeOffsets{}), { fse, store });
     ACECompressor quantizeLengths(
             buildNode(nodes::QuantizeOffsets{}), { fse, store });
+    ACECompressor mortonFieldLz(buildNode(nodes::Morton3D{}), { fieldLz });
+    ACECompressor sphericalFieldLz(buildNode(nodes::SphericalRange{}), { fieldLz });
+    ACECompressor quarsFieldLz(buildNode(nodes::QuaRsInt{}), { fieldLz });
+    ACECompressor elfFieldLz(buildNode(nodes::ElfErase{}), { fieldLz });
+    ACECompressor bitplaneFieldLz(buildNode(nodes::BitplaneSplit{}), { fieldLz, fieldLz });
+    ACECompressor octreeFieldLz(buildNode(nodes::OctreeOccupancy{}), { fieldLz });
+    ACECompressor linearPredictFieldLz(buildNode(nodes::LinearPredict{}), { fieldLz });
+    ACECompressor tans4FieldLz(buildNode(nodes::Tans4Interleaved{}), { fieldLz });
+
     std::vector<ACECompressor> prebuilt = {
         fieldLz,
         zstd,
@@ -195,6 +222,14 @@ std::vector<ACECompressor> makePrebuiltNumericCompressors()
         bf16Decon,
         quantizeOffsets,
         quantizeLengths,
+        mortonFieldLz,
+        sphericalFieldLz,
+        quarsFieldLz,
+        elfFieldLz,
+        bitplaneFieldLz,
+        octreeFieldLz,
+        linearPredictFieldLz,
+        tans4FieldLz,
     };
     compressors.insert(compressors.end(), prebuilt.begin(), prebuilt.end());
     return compressors;
@@ -211,10 +246,16 @@ std::vector<ACECompressor> makePrebuiltStructCompressors()
     ACECompressor transpose(buildNode(nodes::TransposeSplit{}), { zstd });
     ACECompressor tokenizeFieldLz(
             buildNode(nodes::TokenizeStruct{}), { transpose, fieldLz });
+    ACECompressor mortonStruct(buildNode(nodes::Morton3D{}), { fieldLz });
+    ACECompressor sphericalStruct(buildNode(nodes::SphericalRange{}), { fieldLz });
+    ACECompressor octreeStruct(buildNode(nodes::OctreeOccupancy{}), { fieldLz });
 
     compressors.push_back(zstd);
     compressors.push_back(transpose);
     compressors.push_back(tokenizeFieldLz);
+    compressors.push_back(mortonStruct);
+    compressors.push_back(sphericalStruct);
+    compressors.push_back(octreeStruct);
 
     for (const auto& compressor : makePrebuiltNumericCompressors()) {
         compressors.push_back(ACECompressor(
