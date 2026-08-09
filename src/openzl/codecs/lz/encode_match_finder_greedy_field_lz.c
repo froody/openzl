@@ -98,6 +98,30 @@ ZL_FORCE_INLINE size_t ZS_countFields(
 {
     uint8_t const* const start  = ip;
     uint8_t const* const ilimit = iend - kFieldSize + 1;
+    if (kFieldSize == 8) {
+        while (ip + 32 <= ilimit) {
+            uint64_t diff0 = ZL_read64(ip + 0) ^ ZL_read64(match + 0);
+            uint64_t diff1 = ZL_read64(ip + 8) ^ ZL_read64(match + 8);
+            uint64_t diff2 = ZL_read64(ip + 16) ^ ZL_read64(match + 16);
+            uint64_t diff3 = ZL_read64(ip + 24) ^ ZL_read64(match + 24);
+            if (diff0 != 0) break;
+            if (diff1 != 0) { ip += 8; match += 8; break; }
+            if (diff2 != 0) { ip += 16; match += 16; break; }
+            if (diff3 != 0) { ip += 24; match += 24; break; }
+            ip += 32;
+            match += 32;
+        }
+    } else if (kFieldSize == 4) {
+        while (ip + 32 <= ilimit) {
+            uint64_t diff0 = ZL_read64(ip + 0) ^ ZL_read64(match + 0);
+            uint64_t diff1 = ZL_read64(ip + 8) ^ ZL_read64(match + 8);
+            uint64_t diff2 = ZL_read64(ip + 16) ^ ZL_read64(match + 16);
+            uint64_t diff3 = ZL_read64(ip + 24) ^ ZL_read64(match + 24);
+            if (diff0 != 0 || diff1 != 0 || diff2 != 0 || diff3 != 0) break;
+            ip += 32;
+            match += 32;
+        }
+    }
     while (ip < ilimit && ZS_checkMatch(ip, match, kFieldSize)) {
         ip += kFieldSize;
         match += kFieldSize;
