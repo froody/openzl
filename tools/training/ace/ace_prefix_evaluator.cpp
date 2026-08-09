@@ -85,45 +85,13 @@ ACEPrefixEvaluator::evaluatePopulation(
     // Build the prefix trie from the candidate population + historical parents
     auto root = buildPrefixTrie(allTrieCandidates);
 
-    // For each candidate, find the deepest shared prefix node and extract its suffix compressor
-    std::vector<ACECompressor> evalTargets;
-    evalTargets.reserve(candidates.size());
-
-    for (size_t i = 0; i < candidates.size(); ++i) {
-        const auto& candidate = candidates[i];
-        std::vector<ACECompressor> steps;
-        extractLinearPipeline(candidate, steps);
-
-        PrefixTrieNode* curr = root.get();
-        PrefixTrieNode* deepestShared = nullptr;
-
-        for (size_t s = 0; s < steps.size(); ++s) {
-            uint64_t h = steps[s].hash();
-            auto it = curr->children.find(h);
-            if (it != curr->children.end()) {
-                curr = it->second.get();
-                if (curr->geneIndices.size() > 1) {
-                    deepestShared = curr;
-                }
-            } else {
-                break;
-            }
-        }
-
-        if (deepestShared && deepestShared->candidateSuffixes.count(i)) {
-            evalTargets.push_back(deepestShared->candidateSuffixes.at(i));
-        } else {
-            evalTargets.push_back(candidate);
-        }
-    }
-
-    // Evaluate candidates/suffixes in parallel across threadPool
+    // Evaluate full candidates in parallel across threadPool
     std::vector<std::future<poly::optional<ACECompressionResult>>> futures;
     futures.reserve(candidates.size());
 
     for (size_t i = 0; i < candidates.size(); ++i) {
-        futures.emplace_back(threadPool.run([target = evalTargets[i], &inputs] {
-            return target.benchmark(inputs);
+        futures.emplace_back(threadPool.run([&candidate = candidates[i], &inputs] {
+            return candidate.benchmark(inputs);
         }));
     }
 
