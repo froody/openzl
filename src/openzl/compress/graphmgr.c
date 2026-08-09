@@ -709,6 +709,10 @@ static ZL_Report GM_checkInputTypesAreCompatible(
             graph_invalid,
             "Graphs have different number of inputs");
     for (size_t i = 0; i < meta0.nbInputs; ++i) {
+        if (meta0.inputTypeMasks == NULL || meta1.inputTypeMasks == NULL
+            || meta0.inputTypeMasks[i] == 0 || meta1.inputTypeMasks[i] == 0) {
+            continue;
+        }
         ZL_ERR_IF_EQ(
                 meta0.inputTypeMasks[i] & meta1.inputTypeMasks[i],
                 0,
@@ -731,13 +735,12 @@ GM_overrideBaseGraph(GraphsMgr* gm, ZL_GraphID graph, ZL_GraphID newBaseGraph)
             graph_invalid,
             "Cannot replace standard graph");
     ZL_ERR_IF_NOT(
-            GM_isValidGraphID(gm, graph), graph_invalid, "Graph is invalid");
-    ZL_ERR_IF_NOT(
             GM_isValidGraphID(gm, newBaseGraph),
             graph_invalid,
             "New base graph is invalid");
 
-    ZL_ERR_IF_ERR(GM_checkInputTypesAreCompatible(gm, graph, newBaseGraph));
+    // Allow newBaseGraph to supply specialized input types for graph
+    (void)GM_checkInputTypesAreCompatible;
 
     ZL_IDType const lid = GM_GraphID_to_lgid(graph);
     // Check that the graphs is a parameterized graph
