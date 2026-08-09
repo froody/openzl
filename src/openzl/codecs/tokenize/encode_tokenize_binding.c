@@ -114,10 +114,56 @@ ZL_FORCE_INLINE ZL_Report writeIndicesImpl(
     ZL_ERR_IF_NULL(out, allocation);
     void* const indices = ZL_Output_ptr(out);
 
-    for (size_t i = 0; i < nbElts; ++i) {
-        uint64_t const token = readTokenAt(input, i, eltWidth);
-        size_t const index   = Map8_findVal(alphabet, token)->val;
-        writeIndexAt(index, indices, i, idxWidth);
+    if (eltWidth == 8) {
+        const uint64_t* in64 = (const uint64_t*)input;
+        if (idxWidth == 1) {
+            uint8_t* out8 = (uint8_t*)indices;
+            for (size_t i = 0; i < nbElts; ++i) {
+                out8[i] = (uint8_t)Map8_findVal(alphabet, in64[i])->val;
+            }
+        } else if (idxWidth == 2) {
+            uint16_t* out16 = (uint16_t*)indices;
+            for (size_t i = 0; i < nbElts; ++i) {
+                out16[i] = (uint16_t)Map8_findVal(alphabet, in64[i])->val;
+            }
+        } else if (idxWidth == 4) {
+            uint32_t* out32 = (uint32_t*)indices;
+            for (size_t i = 0; i < nbElts; ++i) {
+                out32[i] = (uint32_t)Map8_findVal(alphabet, in64[i])->val;
+            }
+        } else {
+            for (size_t i = 0; i < nbElts; ++i) {
+                writeIndexAt(Map8_findVal(alphabet, in64[i])->val, indices, i, idxWidth);
+            }
+        }
+    } else if (eltWidth == 4) {
+        const uint32_t* in32 = (const uint32_t*)input;
+        if (idxWidth == 1) {
+            uint8_t* out8 = (uint8_t*)indices;
+            for (size_t i = 0; i < nbElts; ++i) {
+                out8[i] = (uint8_t)Map8_findVal(alphabet, in32[i])->val;
+            }
+        } else if (idxWidth == 2) {
+            uint16_t* out16 = (uint16_t*)indices;
+            for (size_t i = 0; i < nbElts; ++i) {
+                out16[i] = (uint16_t)Map8_findVal(alphabet, in32[i])->val;
+            }
+        } else if (idxWidth == 4) {
+            uint32_t* out32 = (uint32_t*)indices;
+            for (size_t i = 0; i < nbElts; ++i) {
+                out32[i] = (uint32_t)Map8_findVal(alphabet, in32[i])->val;
+            }
+        } else {
+            for (size_t i = 0; i < nbElts; ++i) {
+                writeIndexAt(Map8_findVal(alphabet, in32[i])->val, indices, i, idxWidth);
+            }
+        }
+    } else {
+        for (size_t i = 0; i < nbElts; ++i) {
+            uint64_t const token = readTokenAt(input, i, eltWidth);
+            size_t const index   = Map8_findVal(alphabet, token)->val;
+            writeIndexAt(index, indices, i, idxWidth);
+        }
     }
     ZL_ERR_IF_ERR(ZL_Output_commit(out, nbElts));
 
@@ -137,8 +183,8 @@ ZL_FORCE_INLINE ZL_Report tokenizeImpl(
     void const* const input = ZL_Input_ptr(in);
     size_t const nbElts     = ZL_Input_numElts(in);
 
-    // Reserve up to 256 entries to skip past the small growth stage.
-    if (!Map8_reserve(tokToIdx, ZL_MIN(256, (uint32_t)nbElts), false)) {
+    // Reserve for up to nbElts entries to prevent map growth reallocations.
+    if (!Map8_reserve(tokToIdx, (uint32_t)ZL_MIN(nbElts, UINT32_MAX), false)) {
         ZL_ERR(allocation);
     }
 
@@ -148,18 +194,40 @@ ZL_FORCE_INLINE ZL_Report tokenizeImpl(
 #if defined(__GNUC__) && defined(__x86_64__)
     __asm__(".p2align 6");
 #endif
-    for (size_t i = 0; i < nbElts; ++i) {
-        uint64_t const token = readTokenAt(input, i, eltWidth);
-        // Check for contains first because we expect many duplicates,
-        // and contains is faster than insert when the key is present.
-        if (!Map8_containsVal(tokToIdx, token)) {
-            size_t const value = nextIdx++;
-            Map8_Insert const insert =
-                    Map8_insertVal(tokToIdx, (Map8_Entry){ token, value });
-            ZL_ASSERT(insert.badAlloc || insert.inserted);
-            // Batch up any allocation failures at the end, so we don't have
-            // early exits from this loop.
-            badAlloc |= insert.badAlloc;
+    if (eltWidth == 8) {
+        const uint64_t* in64 = (const uint64_t*)input;
+        for (size_t i = 0; i < nbElts; ++i) {
+            uint64_t const token = in64[i];
+            if (!Map8_containsVal(tokToIdx, token)) {
+                size_t const value = nextIdx++;
+                Map8_Insert const insert =
+                        Map8_insertVal(tokToIdx, (Map8_Entry){ token, value });
+                ZL_ASSERT(insert.badAlloc || insert.inserted);
+                badAlloc |= insert.badAlloc;
+            }
+        }
+    } else if (eltWidth == 4) {
+        const uint32_t* in32 = (const uint32_t*)input;
+        for (size_t i = 0; i < nbElts; ++i) {
+            uint64_t const token = in32[i];
+            if (!Map8_containsVal(tokToIdx, token)) {
+                size_t const value = nextIdx++;
+                Map8_Insert const insert =
+                        Map8_insertVal(tokToIdx, (Map8_Entry){ token, value });
+                ZL_ASSERT(insert.badAlloc || insert.inserted);
+                badAlloc |= insert.badAlloc;
+            }
+        }
+    } else {
+        for (size_t i = 0; i < nbElts; ++i) {
+            uint64_t const token = readTokenAt(input, i, eltWidth);
+            if (!Map8_containsVal(tokToIdx, token)) {
+                size_t const value = nextIdx++;
+                Map8_Insert const insert =
+                        Map8_insertVal(tokToIdx, (Map8_Entry){ token, value });
+                ZL_ASSERT(insert.badAlloc || insert.inserted);
+                badAlloc |= insert.badAlloc;
+            }
         }
     }
 

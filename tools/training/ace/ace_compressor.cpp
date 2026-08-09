@@ -769,10 +769,14 @@ poly::optional<ACECompressionResult> benchmark(
 poly::optional<ACECompressionResult> ACECompressor::benchmark(
         poly::span<const Input> inputs) const
 {
-    Compressor compressor;
-    // TODO(terrelln): Allow parameterization
-    compressor.selectStartingGraph(build(compressor));
-    return openzl::training::benchmark(compressor, inputs);
+    try {
+        Compressor compressor;
+        // TODO(terrelln): Allow parameterization
+        compressor.selectStartingGraph(build(compressor));
+        return openzl::training::benchmark(compressor, inputs);
+    } catch (...) {
+        return poly::nullopt;
+    }
 }
 } // namespace training
 } // namespace openzl

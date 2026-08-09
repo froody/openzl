@@ -1049,6 +1049,9 @@ GM_GraphMetadata GM_getGraphMetadata(const GraphsMgr* gm, ZL_GraphID gid)
         return GM_getSegmenterMetadata(gm, gid);
 
     const ZL_FunctionGraphDesc* desc = GM_getMultiInputGraphDesc(gm, gid);
+    if (desc == NULL) {
+        return (GM_GraphMetadata){ .nbInputs = 0, .baseGraphID = ZL_GRAPH_ILLEGAL };
+    }
 
     // baseGraphID
     if (meta.graphType == ZL_GraphType_parameterized) {
@@ -1209,7 +1212,9 @@ size_t GM_getGraphNbInputs(const GraphsMgr* gm, ZL_GraphID graphid)
 ZL_Type GM_getGraphInput0Mask(const GraphsMgr* gm, ZL_GraphID graphid)
 {
     const GM_GraphMetadata meta = GM_getGraphMetadata(gm, graphid);
-    ZL_ASSERT_EQ(meta.nbInputs, 1);
+    if (meta.nbInputs == 0 || meta.inputTypeMasks == NULL) {
+        return (ZL_Type)0;
+    }
     return meta.inputTypeMasks[0];
 }
 

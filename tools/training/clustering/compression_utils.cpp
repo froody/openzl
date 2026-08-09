@@ -99,81 +99,83 @@ SizeTimePair CompressionUtils::compressSample(
         const std::function<bool(ColumnInfo)>& filter,
         const MultiInput& sample) const
 {
-    // Set up local params for clustering
-    uint8_t* dst   = NULL;
-    size_t dstSize = 0;
-    auto arena     = detail::NonNullUniqueCPtr<Arena>(
-            ALLOC_HeapArena_create(), ALLOC_Arena_freeArena);
-    A1C_Arena a1cArena = A1C_Arena_wrap(arena.get());
-    openzl::CCtx cctx;
-    auto errCtx = ZL_CCtx_getOperationContext(cctx.get())->defaultScopeContext;
-    cctx.unwrap(
-            ZL_Clustering_serializeClusteringConfig(
-                    errCtx, &dst, &dstSize, config.get(), &a1cArena),
-            "Failed to serialize clustering config");
-    ZL_CopyParam configParam = (ZL_CopyParam){
-        .paramId   = ZL_GENERIC_CLUSTERING_CONFIG_ID,
-        .paramPtr  = dst,
-        .paramSize = dstSize,
-    };
-    ZL_LocalParams clusteringParams = (ZL_LocalParams){
-        .copyParams = { .copyParams = &configParam, .nbCopyParams = 1 },
-    };
-    ZL_RuntimeGraphParameters runtimeParams = (ZL_RuntimeGraphParameters){
-        .customGraphs   = successors_.data(),
-        .nbCustomGraphs = successors_.size(),
-        .customNodes    = clusteringCodecs_.data(),
-        .nbCustomNodes  = clusteringCodecs_.size(),
-        .localParams    = &clusteringParams,
-    };
+    try {
+        // Set up local params for clustering
+        uint8_t* dst   = NULL;
+        size_t dstSize = 0;
+        auto arena     = detail::NonNullUniqueCPtr<Arena>(
+                ALLOC_HeapArena_create(), ALLOC_Arena_freeArena);
+        A1C_Arena a1cArena = A1C_Arena_wrap(arena.get());
+        openzl::CCtx cctx;
+        auto errCtx = ZL_CCtx_getOperationContext(cctx.get())->defaultScopeContext;
+        cctx.unwrap(
+                ZL_Clustering_serializeClusteringConfig(
+                        errCtx, &dst, &dstSize, config.get(), &a1cArena),
+                "Failed to serialize clustering config");
+        ZL_CopyParam configParam = (ZL_CopyParam){
+            .paramId   = ZL_GENERIC_CLUSTERING_CONFIG_ID,
+            .paramPtr  = dst,
+            .paramSize = dstSize,
+        };
+        ZL_LocalParams clusteringParams = (ZL_LocalParams){
+            .copyParams = { .copyParams = &configParam, .nbCopyParams = 1 },
+        };
+        ZL_RuntimeGraphParameters runtimeParams = (ZL_RuntimeGraphParameters){
+            .customGraphs   = successors_.data(),
+            .nbCustomGraphs = successors_.size(),
+            .customNodes    = clusteringCodecs_.data(),
+            .nbCustomNodes  = clusteringCodecs_.size(),
+            .localParams    = &clusteringParams,
+        };
 
-    cctx.unwrap(ZL_CCtx_selectStartingGraphID(
-            cctx.get(), compressor_, ZL_GRAPH_CLUSTERING, &runtimeParams));
-    cctx.setParameter(openzl::CParam::FormatVersion, ZL_MAX_FORMAT_VERSION);
-    // disable anti-inflation guard so training sees true compressed sizes
-    cctx.setParameter(
-            openzl::CParam::StoreOnExpansion, ZL_TernaryParam_disable);
-    size_t compressBound = 0;
-    std::vector<const ZL_Input*> constInputs;
-    for (auto& input : *sample) {
-        auto column = getColumnInfo(input);
-        if (!filter(column)) {
-            continue;
+        cctx.unwrap(ZL_CCtx_selectStartingGraphID(
+                cctx.get(), compressor_, ZL_GRAPH_CLUSTERING, &runtimeParams));
+        cctx.setParameter(openzl::CParam::FormatVersion, ZL_MAX_FORMAT_VERSION);
+        // disable anti-inflation guard so training sees true compressed sizes
+        cctx.setParameter(
+                openzl::CParam::StoreOnExpansion, ZL_TernaryParam_disable);
+        size_t compressBound = 0;
+        std::vector<const ZL_Input*> constInputs;
+        for (auto& input : *sample) {
+            auto column = getColumnInfo(input);
+            if (!filter(column)) {
+                continue;
+            }
+            compressBound += ZL_compressBound(
+                    (input.contentSize() + input.numElts() * 4)
+                    * compressBoundFactor_);
+            constInputs.push_back(input.get());
         }
-        compressBound += ZL_compressBound(
-                (input.contentSize() + input.numElts() * 4)
-                * compressBoundFactor_);
-        constInputs.push_back(input.get());
-    }
-    if (constInputs.empty()) {
-        return (SizeTimePair){ 0, 0 };
-    }
-    std::string compressed(compressBound, 0);
-    auto start      = std::chrono::high_resolution_clock::now();
-    ZL_Report csize = ZL_CCtx_compressMultiTypedRef(
-            cctx.get(),
-            compressed.data(),
-            compressed.size(),
-            constInputs.data(),
-            constInputs.size());
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration =
-            std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    // TODO: T231098760: This implementation is a hack to get around the current
-    // state of csv successors
-    if (ZL_isError(csize)) {
-        static std::atomic<bool> errorLogged{ false };
-        if (!errorLogged.exchange(true)) {
-            // Only log the first occurrence of this error
-            Logger::log(
-                    ERRORS,
-                    "Selected a successor that fails to compress on input, treating this as a candidate with a large compression cost. Suppressing future logs for this error.");
+        if (constInputs.empty()) {
+            return (SizeTimePair){ 0, 0 };
         }
+        std::string compressed(compressBound, 0);
+        auto start      = std::chrono::high_resolution_clock::now();
+        ZL_Report csize = ZL_CCtx_compressMultiTypedRef(
+                cctx.get(),
+                compressed.data(),
+                compressed.size(),
+                constInputs.data(),
+                constInputs.size());
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto duration =
+                std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        if (ZL_isError(csize)) {
+            static std::atomic<bool> errorLogged{ false };
+            if (!errorLogged.exchange(true)) {
+                Logger::log(
+                        ERRORS,
+                        "Selected a successor that fails to compress on input, treating this as a candidate with a large compression cost. Suppressing future logs for this error.");
+            }
+            return SizeTimePair{ std::numeric_limits<uint32_t>::max(),
+                                 std::numeric_limits<uint32_t>::max() };
+        }
+        cctx.unwrap(csize);
+        return SizeTimePair{ ZL_RES_value(csize), (size_t)duration.count() };
+    } catch (...) {
         return SizeTimePair{ std::numeric_limits<uint32_t>::max(),
                              std::numeric_limits<uint32_t>::max() };
     }
-    cctx.unwrap(csize);
-    return SizeTimePair{ ZL_RES_value(csize), (size_t)duration.count() };
 }
 
 std::future<SizeTimePair> CompressionUtils::tryCompress(
