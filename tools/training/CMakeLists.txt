@@ -65,5 +65,17 @@ if (OPENZL_BUILD_TRAINING_TOOLS)
     )
     apply_openzl_compile_options_to_target(test_training)
     gtest_discover_tests(test_training)
+
+    add_executable(bench_ace_prefix ${CMAKE_CURRENT_LIST_DIR}/benchmarks/bench_ace_prefix.cpp)
+    add_dependencies(bench_ace_prefix xgboost_external)
+    target_link_libraries(
+        bench_ace_prefix
+        PRIVATE
+            tools_training
+            openzl
+            openzl_cpp
+            custom_parsers
+    )
+    apply_openzl_compile_options_to_target(bench_ace_prefix)
   endif()
 endif()
