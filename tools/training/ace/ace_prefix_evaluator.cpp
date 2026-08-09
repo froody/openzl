@@ -67,12 +67,23 @@ std::vector<poly::optional<ACECompressionResult>>
 ACEPrefixEvaluator::evaluatePopulation(
         poly::span<const ACECompressor> candidates,
         poly::span<const Input> inputs,
-        ThreadPool& threadPool)
+        ThreadPool& threadPool,
+        poly::span<const ACECompressor> history)
 {
     std::vector<poly::optional<ACECompressionResult>> results(candidates.size(), poly::nullopt);
 
-    // Build the prefix trie from the current candidate population
-    auto root = buildPrefixTrie(candidates);
+    // Combine current candidates with historical parent candidates for inter-generation prefix sharing
+    std::vector<ACECompressor> allTrieCandidates;
+    allTrieCandidates.reserve(candidates.size() + history.size());
+    for (const auto& c : candidates) {
+        allTrieCandidates.push_back(c);
+    }
+    for (const auto& h : history) {
+        allTrieCandidates.push_back(h);
+    }
+
+    // Build the prefix trie from the candidate population + historical parents
+    auto root = buildPrefixTrie(allTrieCandidates);
 
     // For each candidate, find the deepest shared prefix node and extract its suffix compressor
     std::vector<ACECompressor> evalTargets;

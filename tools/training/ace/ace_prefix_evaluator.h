@@ -44,7 +44,8 @@ class ACEPrefixEvaluator {
     static std::vector<poly::optional<ACECompressionResult>> evaluatePopulation(
             poly::span<const ACECompressor> candidates,
             poly::span<const Input> inputs,
-            ThreadPool& threadPool);
+            ThreadPool& threadPool,
+            poly::span<const ACECompressor> history = {});
 
     /**
      * @brief Builds a prefix trie from a population of candidate compressors.

@@ -152,14 +152,24 @@ std::vector<std::vector<float>> AutomatedCompressorExplorer::computeFitness(
         uncachedIndices.push_back(i);
     }
 
-    // Evaluate uncached candidates via prefix-tree work sharing
+    // Evaluate uncached candidates via prefix-tree work sharing with inter-generation history
     std::vector<ACECompressor> uncachedGenes;
     uncachedGenes.reserve(uncachedIndices.size());
     for (auto idx : uncachedIndices) {
         uncachedGenes.push_back(genes[idx]);
     }
 
-    auto evalResults = ACEPrefixEvaluator::evaluatePopulation(uncachedGenes, inputs_, threadPool_);
+    auto evalResults = ACEPrefixEvaluator::evaluatePopulation(
+            uncachedGenes, inputs_, threadPool_, evaluatedHistory_);
+
+    // Update history for subsequent generations (keep up to 500 candidates)
+    evaluatedHistory_.insert(
+            evaluatedHistory_.end(), uncachedGenes.begin(), uncachedGenes.end());
+    if (evaluatedHistory_.size() > 500) {
+        evaluatedHistory_.erase(
+                evaluatedHistory_.begin(),
+                evaluatedHistory_.begin() + (evaluatedHistory_.size() - 500));
+    }
 
     std::vector<std::vector<float>> results(genes.size());
     size_t uncachedIdx = 0;

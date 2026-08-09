@@ -171,6 +171,7 @@ class AutomatedCompressorExplorer : public GeneticAlgorithm<ACECompressor> {
     ACEMutate mutate_;
     std::unordered_map<uint64_t, std::pair<size_t, std::vector<float>>>
             cachedFitness_;
+    std::vector<ACECompressor> evaluatedHistory_;
     std::atomic<size_t> completedCandidates_{ 0 };
     std::atomic<size_t> totalCandidates_{ 0 };
     ProgressCallback progressCallback_;
