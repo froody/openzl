@@ -2,6 +2,8 @@
 
 #include "tools/training/ace/ace_compressors.h"
 
+#include <cstdlib>
+
 #include "openzl/openzl.hpp"
 #include "openzl/zl_reflection.h"
 #include "tools/training/ace/ace_sampling.h"
@@ -156,6 +158,62 @@ std::vector<ACECompressor> makePrebuiltNumericCompressors()
         quantizeLengths,
     };
     compressors.insert(compressors.end(), prebuilt.begin(), prebuilt.end());
+    // ACE_TOK_SEEDS: tokenize-first chains that won the big points slots of
+    // the strongest cross-corpus model, so every slot starts with them in the
+    // population.
+    if (std::getenv("ACE_TOK_SEEDS") != nullptr) {
+        ACECompressor transposeEntropy(
+                buildNode(nodes::TransposeSplit{}), { entropy });
+        ACECompressor transposeFse(buildNode(nodes::TransposeSplit{}), { fse });
+        ACECompressor transposeZstd(
+                buildNode(nodes::TransposeSplit{}), { zstd });
+        ACECompressor dRpT(
+                buildNode(nodes::DeltaInt{}),
+                { ACECompressor(
+                        buildNode(nodes::RangePack{}), { transposeEntropy }) });
+        ACECompressor dZzT(
+                buildNode(nodes::DeltaInt{}),
+                { ACECompressor(
+                        buildNode(nodes::Zigzag{}), { transposeEntropy }) });
+        ACECompressor dT(buildNode(nodes::DeltaInt{}), { transposeEntropy });
+        ACECompressor dZzTFse(
+                buildNode(nodes::DeltaInt{}),
+                { ACECompressor(buildNode(nodes::Zigzag{}), { transposeFse }) });
+        ACECompressor rpDTZstd(
+                buildNode(nodes::RangePack{}),
+                { ACECompressor(
+                        buildNode(nodes::DeltaInt{}), { transposeZstd }) });
+        ACECompressor dQo(buildNode(nodes::DeltaInt{}), { quantizeOffsets });
+        for (bool sorted : { true, false }) {
+            compressors.emplace_back(
+                    buildNode(nodes::TokenizeNumeric{ sorted }),
+                    std::vector{ dRpT, dZzT });
+            compressors.emplace_back(
+                    buildNode(nodes::TokenizeNumeric{ sorted }),
+                    std::vector{ dZzTFse, top8bitsEntropy });
+        }
+        compressors.emplace_back(
+                buildNode(nodes::RangePack{}),
+                std::vector{ ACECompressor(
+                        buildNode(nodes::TokenizeNumeric{ true }),
+                        { dT, dZzT }) });
+        ACECompressor tokTail(
+                buildNode(nodes::TokenizeNumeric{ true }),
+                { rpDTZstd, transposeEntropy });
+        compressors.emplace_back(
+                buildNode(nodes::DeltaInt{}),
+                std::vector{ ACECompressor(
+                        buildNode(nodes::Zigzag{}), { tokTail }) });
+        ACECompressor tokQo(
+                buildNode(nodes::TokenizeNumeric{ true }),
+                { dQo, transposeFse });
+        compressors.emplace_back(
+                buildNode(nodes::DivideBy{}),
+                std::vector{ ACECompressor(
+                        buildNode(nodes::DeltaInt{}),
+                        { ACECompressor(
+                                buildNode(nodes::Zigzag{}), { tokQo }) }) });
+    }
     return compressors;
 }
 
