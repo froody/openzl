@@ -2,7 +2,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <memory>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -29,6 +33,48 @@ const std::string ACE_GRAPH_NAME = "zl.ace";
 namespace {
 using namespace openzl::training::graph_mutation;
 using namespace openzl::tools::logger;
+
+/// ACE_CENSUS: one stderr line per generation describing the population, so
+/// search behaviour can be compared across variants.
+void logCensus(const AutomatedCompressorExplorer& ace, size_t graphIdx)
+{
+    const auto fitness = ace.fitness();
+    const auto rank    = ace.rank();
+    const auto pop     = ace.population();
+    double srcSize     = 0;
+    for (const auto& in : ace.inputs()) {
+        srcSize += in.contentSize();
+    }
+    float best    = std::numeric_limits<float>::infinity();
+    size_t noGain = 0;
+    for (size_t i = 0; i < pop.size(); ++i) {
+        noGain += fitness[i][0] >= 0.95 * srcSize;
+        best = std::min(best, fitness[i][0]);
+    }
+    size_t front0     = 0;
+    size_t near       = 0;
+    size_t components = 0;
+    std::set<uint64_t> sizes;
+    for (size_t i = 0; i < pop.size(); ++i) {
+        near += fitness[i][0] <= 1.01 * best;
+        front0 += rank[i] == 0;
+        sizes.insert((uint64_t)fitness[i][0]);
+        components += pop[i].numComponents();
+    }
+    fprintf(stderr,
+            "ACE_CENSUS graph=%zu gen=%zu pop=%zu front0=%zu uniq_size=%zu "
+            "best=%.0f ratio=%.4f nogain=%zu within1pct=%zu mean_components=%.2f\n",
+            graphIdx,
+            ace.generation(),
+            pop.size(),
+            front0,
+            sizes.size(),
+            best,
+            srcSize / best,
+            noGain,
+            near,
+            (double)components / pop.size());
+}
 
 class ACEBackendGraphMutation : public BackendGraphMutation {
    public:
@@ -204,6 +250,12 @@ AutomatedCompressorExplorer::Parameters aceParameters(
     params.maxTime          = maxTime;
     params.formatVersion    = formatVersion;
     params.compressionLevel = compressionLevel;
+    if (const char* g = std::getenv("ACE_MAX_GENERATIONS")) {
+        params.maxGenerations = std::strtoul(g, nullptr, 10);
+    }
+    if (const char* s = std::getenv("ACE_SEED")) {
+        params.seed = std::strtoul(s, nullptr, 10);
+    }
     return params;
 }
 
@@ -213,7 +265,11 @@ void runTraining(
         size_t graphIdx,
         size_t numGraphs)
 {
+    const bool census = std::getenv("ACE_CENSUS") != nullptr;
     for (;;) {
+        if (census && ace.generation() > 0) {
+            logCensus(ace, graphIdx);
+        }
         Logger::logProgress(
                 INFO,
                 ace.progress(),
