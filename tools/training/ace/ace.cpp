@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <set>
@@ -12,7 +14,9 @@
 
 #include "openzl/cpp/Compressor.hpp"
 
+#include "openzl/cpp/codecs/BruteForce.hpp"
 #include "openzl/compress/cgraph.h"
+#include "openzl/compress/selectors/selector_brute_force.h"
 #include "openzl/zl_reflection.h"
 #include "tools/logger/Logger.h"
 #include "tools/training/ace/ace.h"
@@ -307,6 +311,272 @@ std::vector<std::unique_ptr<BackendGraphMutation>> makeAceMutations(
     return mutations;
 }
 
+/**
+ * Replaces the backend graph with a brute-force selector over @p picks, so
+ * each stream uses its smallest pick at compression time.
+ *
+ * The selector reads its int params from the graph it runs as. After
+ * ZL_Compressor_overrideBaseGraph() that is the zl.ace wrapper graph, and its
+ * local params are replaced by newGraphParams(), so @p intParams are attached
+ * to the wrapper together with the ACE state, not to the brute force graph.
+ */
+class ACEBruteMutation : public BackendGraphMutation {
+   public:
+    ACEBruteMutation(
+            std::string backendGraph,
+            std::vector<ACECompressor> picks,
+            std::vector<ZL_IntParam> intParams,
+            std::shared_ptr<const std::string> aceState)
+            : BackendGraphMutation(std::move(backendGraph)),
+              picks_(std::move(picks)),
+              intParams_(std::move(intParams)),
+              aceState_(std::move(aceState))
+    {
+    }
+
+    poly::optional<GraphID> newGraph(Compressor& compressor) const override
+    {
+        std::vector<GraphID> successors;
+        successors.reserve(picks_.size());
+        for (const auto& pick : picks_) {
+            successors.push_back(pick.build(compressor));
+        }
+        return graphs::BruteForce(std::move(successors))
+                .parameterize(compressor);
+    }
+
+    poly::optional<GraphParameters> newGraphParams(
+            Compressor& compressor) const override
+    {
+        if (intParams_.empty() && !aceState_) {
+            return {};
+        }
+        GraphParameters params;
+        params.localParams.emplace();
+        for (const auto& p : intParams_) {
+            params.localParams->addIntParam(p);
+        }
+        if (aceState_) {
+            params.localParams->addCopyParam(
+                    AutomatedCompressorExplorer::kAceStateParamId,
+                    aceState_->data(),
+                    aceState_->size());
+        }
+        return params;
+    }
+
+   private:
+    std::vector<ACECompressor> picks_;
+    std::vector<ZL_IntParam> intParams_;
+    std::shared_ptr<const std::string> aceState_;
+};
+
+/**
+ * ACE_BRUTE_K=K: greedily picks up to K candidates from @p ace that complement
+ * each other on its inputs (each pick most reduces the sum over inputs of the
+ * best size so far). With ACE_BRUTE_TOL=t every gene whose size is within
+ * (1 + t) of the smallest is a candidate, not only front 0.
+ *
+ * @param rates Receives each pick's decode cost in ns per KiB of input when
+ * ACE_BRUTE_LAMBDA is set.
+ */
+std::vector<ACECompressor> pickComplementary(
+        const AutomatedCompressorExplorer& ace,
+        const std::string& backendGraph,
+        size_t maxPicks,
+        std::vector<int>& rates)
+{
+    auto solutions = ace.solution();
+    if (const char* tol = std::getenv("ACE_BRUTE_TOL")) {
+        const double t = std::strtod(tol, nullptr);
+        float best     = std::numeric_limits<float>::infinity();
+        for (const auto& f : ace.fitness()) {
+            best = std::min(best, f[0]);
+        }
+        solutions.clear();
+        for (size_t i = 0; i < ace.population().size(); ++i) {
+            if (ace.fitness()[i][0] <= best * (1 + t)) {
+                solutions.emplace_back(ace.population()[i], ace.fitness()[i]);
+            }
+        }
+    }
+    const auto inputs = ace.inputs();
+    const size_t n    = inputs.size();
+    auto benchmarkOne = [&](const ACECompressor& c, size_t i) {
+        return c.benchmark(
+                inputs.subspan(i, 1), ace.formatVersion(), ace.compressionLevel());
+    };
+    std::vector<std::vector<double>> sizes;
+    std::vector<double> dtime;
+    std::vector<ACECompressor> cands;
+    for (auto& [cand, _] : solutions) {
+        std::vector<double> s(n);
+        double dns = 0;
+        bool ok    = true;
+        for (size_t i = 0; i < n && ok; ++i) {
+            auto r = benchmarkOne(cand, i);
+            ok     = r.has_value();
+            if (ok) {
+                s[i] = (double)r->compressedSize;
+                dns += (double)r->decompressionTime.count();
+            }
+        }
+        if (ok) {
+            sizes.push_back(std::move(s));
+            dtime.push_back(dns);
+            cands.push_back(cand);
+        }
+    }
+    std::vector<ACECompressor> picked;
+    std::vector<double> pickedDtime;
+    // Each extra pick costs a full trial compression per stream, so it must
+    // save at least ACE_BRUTE_MIN_GAIN (default 0.2%) on the training inputs.
+    const char* minGainEnv = std::getenv("ACE_BRUTE_MIN_GAIN");
+    const double minGain = minGainEnv ? std::strtod(minGainEnv, nullptr) : 0.002;
+    std::vector<double> best(n, std::numeric_limits<double>::infinity());
+    std::vector<bool> used(cands.size(), false);
+    double total = std::numeric_limits<double>::infinity();
+    while (picked.size() < maxPicks) {
+        size_t bestIdx = cands.size();
+        double bestTot = total;
+        for (size_t c = 0; c < cands.size(); ++c) {
+            if (used[c]) {
+                continue;
+            }
+            double t = 0;
+            for (size_t i = 0; i < n; ++i) {
+                t += std::min(best[i], sizes[c][i]);
+            }
+            if (t < bestTot) {
+                bestTot = t;
+                bestIdx = c;
+            }
+        }
+        if (bestIdx == cands.size()
+            || (!picked.empty() && bestTot > (1 - minGain) * total)) {
+            Logger::log(
+                    INFO,
+                    "ACE_BRUTE ",
+                    backendGraph,
+                    " stop: front ",
+                    cands.size(),
+                    " best next ",
+                    (size_t)bestTot,
+                    " vs ",
+                    (size_t)total);
+            break;
+        }
+        used[bestIdx] = true;
+        for (size_t i = 0; i < n; ++i) {
+            best[i] = std::min(best[i], sizes[bestIdx][i]);
+        }
+        Logger::log(
+                INFO,
+                "ACE_BRUTE ",
+                backendGraph,
+                " front ",
+                cands.size(),
+                " inputs ",
+                n,
+                " pick ",
+                picked.size(),
+                ": train bytes ",
+                (size_t)total,
+                " -> ",
+                (size_t)bestTot);
+        total = bestTot;
+        picked.push_back(cands[bestIdx]);
+        pickedDtime.push_back(dtime[bestIdx]);
+    }
+    // ACE_BRUTE_SLACK: the selector takes the first successor within the slack
+    // of the smallest, so list the fastest-decoding successors first.
+    if (std::getenv("ACE_BRUTE_SLACK") != nullptr) {
+        std::vector<size_t> order(picked.size());
+        for (size_t k = 0; k < order.size(); ++k) {
+            order[k] = k;
+        }
+        std::sort(order.begin(), order.end(), [&](size_t x, size_t y) {
+            return pickedDtime[x] < pickedDtime[y];
+        });
+        std::vector<ACECompressor> sorted;
+        for (auto k : order) {
+            sorted.push_back(picked[k]);
+        }
+        picked = std::move(sorted);
+    }
+    // ACE_BRUTE_LAMBDA: the selector needs each pick's decode cost per input
+    // byte. Training-time decode timings are noisy under load, so take the min
+    // of 3 timings per input.
+    if (std::getenv("ACE_BRUTE_LAMBDA") != nullptr) {
+        double bytes = 0;
+        for (size_t i = 0; i < n; ++i) {
+            bytes += (double)inputs[i].contentSize();
+        }
+        for (const auto& p : picked) {
+            double ns = 0;
+            for (size_t i = 0; i < n; ++i) {
+                double m = std::numeric_limits<double>::infinity();
+                for (int rep = 0; rep < 3; ++rep) {
+                    auto r = benchmarkOne(p, i);
+                    if (r.has_value()) {
+                        m = std::min(m, (double)r->decompressionTime.count());
+                    }
+                }
+                ns += std::isfinite(m) ? m : 0;
+            }
+            rates.push_back((int)std::lround(ns / bytes * 1024.0));
+        }
+    }
+    return picked;
+}
+
+/**
+ * @returns A single mutation putting the ACE_BRUTE_K complementary picks of
+ * @p ace under a brute-force selector, or an empty vector when there is no
+ * pick.
+ */
+std::vector<std::unique_ptr<BackendGraphMutation>> makeBruteMutations(
+        const std::string& backendGraph,
+        const AutomatedCompressorExplorer& ace,
+        std::shared_ptr<const std::string> aceState,
+        size_t bruteK)
+{
+    std::vector<int> rates;
+    auto picks = pickComplementary(ace, backendGraph, bruteK, rates);
+    std::vector<std::unique_ptr<BackendGraphMutation>> mutations;
+    if (picks.empty()) {
+        return mutations;
+    }
+    if (picks.size() == 1) {
+        mutations.push_back(
+                std::make_unique<ACEBackendGraphMutation>(
+                        backendGraph, std::move(picks[0]), aceState));
+        return mutations;
+    }
+    std::vector<ZL_IntParam> intParams;
+    if (const char* s = std::getenv("ACE_BRUTE_SLACK")) {
+        intParams.push_back(
+                { ZL_BRUTE_FORCE_SLACK_PARAM,
+                  (int)std::strtol(s, nullptr, 10) });
+    }
+    if (const char* l = std::getenv("ACE_BRUTE_LAMBDA")) {
+        intParams.push_back(
+                { ZL_BRUTE_FORCE_LAMBDA_PARAM,
+                  (int)std::strtol(l, nullptr, 10) });
+        for (size_t k = 0; k < rates.size(); ++k) {
+            intParams.push_back(
+                    { ZL_BRUTE_FORCE_RATE_PARAM_BASE + (int)k, rates[k] });
+        }
+    }
+    mutations.push_back(
+            std::make_unique<ACEBruteMutation>(
+                    backendGraph,
+                    std::move(picks),
+                    std::move(intParams),
+                    std::move(aceState)));
+    return mutations;
+}
+
 /// @returns The compressor produced by applying @p mutations in order.
 Compressor applyMutations(
         const std::function<Compressor()>& makeCompressor,
@@ -350,6 +620,19 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
 
     MergedParetoFrontier::BackendGraphMutationsMap candidates;
     std::vector<std::unique_ptr<BackendGraphMutation>> checkPointMutations;
+
+    // ACE_BRUTE_K=K (K > 1): each graph becomes a brute-force selector over
+    // up to K complementary picks. Only applies without --pareto-frontier.
+    const char* bruteEnv = std::getenv("ACE_BRUTE_K");
+    const size_t bruteK  = bruteEnv ? std::strtoul(bruteEnv, nullptr, 10) : 1;
+    const bool brute     = bruteK > 1 && !trainParams.paretoFrontier;
+    // ACE_BRUTE_K1_OUT=path: also writes the plain smallest-candidate
+    // compressor from the same search, so selection is measured without
+    // search noise.
+    const char* k1Out = trainParams.paretoFrontier
+            ? nullptr
+            : std::getenv("ACE_BRUTE_K1_OUT");
+    MergedParetoFrontier::BackendGraphMutationsMap k1Candidates;
 
     // One budget for the whole phase: each graph builds its own explorer, so
     // an unshared deadline is spent once per graph.
@@ -438,17 +721,32 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
                         poly::nullopt,
                         aceState,
                         /* onlySaveAceState */ true));
-        candidates.emplace(
-                backendGraph,
-                makeAceMutations(
-                        backendGraph,
-                        ace,
-                        trainParams.saveAceState ? aceState : nullptr,
-                        trainParams.paretoFrontier));
+        auto savedState = trainParams.saveAceState ? aceState : nullptr;
+        std::vector<std::unique_ptr<BackendGraphMutation>> mutations;
+        if (brute) {
+            mutations = makeBruteMutations(backendGraph, ace, savedState, bruteK);
+        }
+        if (mutations.empty()) {
+            mutations = makeAceMutations(
+                    backendGraph, ace, savedState, trainParams.paretoFrontier);
+        }
+        if (k1Out != nullptr) {
+            k1Candidates.emplace(
+                    backendGraph,
+                    makeAceMutations(
+                            backendGraph, ace, savedState, /* paretoFrontier */ false));
+        }
+        candidates.emplace(backendGraph, std::move(mutations));
     }
 
     checkPoint_.emplace(
             applyMutations(makeCompressor, checkPointMutations).serialize());
+
+    if (k1Out != nullptr) {
+        MergedParetoFrontier k1(
+                makeCompressor, std::move(k1Candidates), inputs, trainParams);
+        std::ofstream(k1Out, std::ios::binary) << *k1.serializedAt(0);
+    }
 
     MergedParetoFrontier frontier(
             makeCompressor, std::move(candidates), inputs, trainParams);
