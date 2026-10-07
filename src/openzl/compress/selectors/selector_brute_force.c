@@ -26,8 +26,29 @@ ZL_GraphID SI_selector_brute_force(
     if (inputType == ZL_Type_string) {
         bestSize += ZL_Input_numElts(inputStream) * sizeof(uint32_t);
     }
+    // Optional int local params, read from the graph that runs this selector
+    // (for ACE that is the zl.ace wrapper graph). Encoder-only choices; the
+    // frame format is unchanged.
+    const ZL_IntParam slackParam =
+            ZL_Selector_getLocalIntParam(selCtx, ZL_BRUTE_FORCE_SLACK_PARAM);
+    const int slack = slackParam.paramId == ZL_LP_INVALID_PARAMID
+            ? 0
+            : slackParam.paramValue;
+    const ZL_IntParam lambdaParam =
+            ZL_Selector_getLocalIntParam(selCtx, ZL_BRUTE_FORCE_LAMBDA_PARAM);
+    const int lambda = lambdaParam.paramId == ZL_LP_INVALID_PARAMID
+            ? 0
+            : lambdaParam.paramValue;
+    size_t* sizes = NULL;
+    if ((slack > 0 || lambda > 0) && nbCustomGraphs > 0) {
+        sizes = (size_t*)ZL_Selector_getScratchSpace(
+                selCtx, nbCustomGraphs * sizeof(size_t));
+    }
     int64_t bestIdx = -1;
     for (size_t i = 0; i < nbCustomGraphs; ++i) {
+        if (sizes != NULL) {
+            sizes[i] = (size_t)-1;
+        }
         // Skip successors that can't be fed the input type, since the
         // successor list is user-provided and isn't validated at registration.
         if (!ICONV_isCompatible(
@@ -42,7 +63,9 @@ ZL_GraphID SI_selector_brute_force(
             continue;
         }
         size_t currSize = ZL_validResult(gr.finalCompressedSize);
-        // printf("curr: %zu, best: %zu\n", currSize, bestSize);
+        if (sizes != NULL) {
+            sizes[i] = currSize;
+        }
         if (currSize < bestSize) {
             bestSize = currSize;
             bestIdx  = (int64_t)i;
@@ -50,6 +73,42 @@ ZL_GraphID SI_selector_brute_force(
     }
     if (bestIdx == -1) {
         return ZL_GRAPH_STORE;
+    }
+    if (sizes == NULL) {
+        return customGraphs[bestIdx];
+    }
+    if (lambda > 0) {
+        // argmin size + lambda * predicted decode time, over the successors
+        // that compress the input.
+        const size_t srcSize = ZL_Input_contentSize(inputStream);
+        const double kib     = (double)srcSize / 1024.0;
+        double bestScore     = 0;
+        int64_t pick         = -1;
+        for (size_t i = 0; i < nbCustomGraphs; ++i) {
+            if (sizes[i] == (size_t)-1
+                || (sizes[i] >= srcSize && (int64_t)i != bestIdx)) {
+                continue;
+            }
+            const ZL_IntParam rate = ZL_Selector_getLocalIntParam(
+                    selCtx, ZL_BRUTE_FORCE_RATE_PARAM_BASE + (int)i);
+            const double ms = rate.paramId == ZL_LP_INVALID_PARAMID
+                    ? 0
+                    : (double)rate.paramValue * kib * 1e-6;
+            const double score = (double)sizes[i] + (double)lambda * ms;
+            if (pick == -1 || score < bestScore) {
+                bestScore = score;
+                pick      = (int64_t)i;
+            }
+        }
+        return customGraphs[pick];
+    }
+    // Slack: the successors are listed fastest-decoding first, so take the
+    // first one whose size is within (1 + slack * 1e-4) of the smallest.
+    const double limit = (double)bestSize * (1.0 + slack * 1e-4);
+    for (int64_t i = 0; i < bestIdx; ++i) {
+        if ((double)sizes[i] <= limit) {
+            return customGraphs[i];
+        }
     }
     return customGraphs[bestIdx];
 }
