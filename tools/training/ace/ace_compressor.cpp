@@ -588,7 +588,7 @@ ACECompressor::ACECompressor(poly::string_view serialized)
             &decoder,
             A1C_Arena_wrap(arena.get()),
             {
-                    .maxDepth = 100,
+                    .maxDepth = 4096,
             });
     A1C_Item* root = A1C_Decoder_decode(
             &decoder, (const uint8_t*)serialized.data(), serialized.size());

@@ -2,6 +2,7 @@
 
 #include "tools/training/ace/automated_compressor_explorer.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <vector>
@@ -130,18 +131,33 @@ struct ArenaDeleter {
 
 std::string AutomatedCompressorExplorer::savePopulation() const
 {
+    return savePopulation(population().size());
+}
+
+std::string AutomatedCompressorExplorer::savePopulation(size_t limit) const
+{
+    std::vector<size_t> order(population().size());
+    for (size_t i = 0; i < order.size(); ++i) {
+        order[i] = i;
+    }
+    if (limit < order.size()) {
+        std::stable_sort(order.begin(), order.end(), [&](size_t x, size_t y) {
+            return fitness()[x][0] < fitness()[y][0];
+        });
+        order.resize(limit);
+    }
     std::unique_ptr<Arena, ArenaDeleter> arena(ALLOC_HeapArena_create());
     auto a         = A1C_Arena_wrap(arena.get());
     A1C_Item* item = A1C_Item_root(&a);
     if (item == nullptr) {
         throw std::bad_alloc();
     }
-    A1C_Item* array = A1C_Item_array(item, population().size(), &a);
+    A1C_Item* array = A1C_Item_array(item, order.size(), &a);
     if (array == nullptr) {
         throw std::bad_alloc();
     }
-    for (const auto& gene : population()) {
-        const auto s = gene.serialize();
+    for (size_t idx : order) {
+        const auto s = population()[idx].serialize();
         if (!A1C_Item_string_copy(array++, s.data(), s.size(), &a)) {
             throw std::bad_alloc();
         }

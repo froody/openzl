@@ -58,6 +58,9 @@ class MultiInput {
     // owned by io::Input stays around by adding a reference to the shared ptr
     void add(std::shared_ptr<tools::io::Input> input)
     {
+        if (group_.empty()) {
+            group_ = std::string(input->name());
+        }
         inputSources_.emplace_back(input);
         add(openzl::Input::refSerial(input->contents()));
     }
@@ -68,7 +71,20 @@ class MultiInput {
         return inputSources_;
     }
 
+    /// Name of the training file this input came from (empty if unknown).
+    /// ACE_SPECIALISTS groups samples by it.
+    const std::string& group() const
+    {
+        return group_;
+    }
+
+    void setGroup(std::string group)
+    {
+        group_ = std::move(group);
+    }
+
    private:
+    std::string group_;
     std::vector<std::shared_ptr<tools::io::Input>> inputSources_;
     std::shared_ptr<std::vector<Input>> inputs_;
 };

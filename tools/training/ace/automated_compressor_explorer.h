@@ -143,6 +143,9 @@ class AutomatedCompressorExplorer : public GeneticAlgorithm<ACECompressor> {
      */
     std::string savePopulation() const;
 
+    /// Saves only the @p limit genes with the smallest compressed size.
+    std::string savePopulation(size_t limit) const;
+
     /**
      * Extends the current population with the population saved to @p snapshot.
      * This can be run at any point during the exploration to merge the current

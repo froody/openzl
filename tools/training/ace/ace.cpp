@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <string_view>
@@ -577,6 +578,57 @@ std::vector<std::unique_ptr<BackendGraphMutation>> makeBruteMutations(
     return mutations;
 }
 
+/**
+ * ACE_SPECIALISTS: runs one search per training file (inputs grouped by the
+ * file-name prefix before "__") for ACE_SPEC_GENERATIONS generations (default
+ * 60), and adds the 10 smallest genes of each to @p ace's population. The
+ * brute-force picks can then put file-specialist graphs next to the
+ * generalist.
+ */
+void addSpecialists(
+        AutomatedCompressorExplorer& ace,
+        const std::vector<MultiInput>& samples,
+        poly::span<const Input> flattened,
+        AutomatedCompressorExplorer::Parameters params,
+        size_t graphIdx)
+{
+    std::map<std::string, std::vector<size_t>> groups;
+    size_t idx = 0;
+    for (const auto& sample : samples) {
+        std::string g = sample.group();
+        g             = g.substr(g.find_last_of('/') + 1);
+        g             = g.substr(0, g.find("__"));
+        for (size_t i = 0; i < sample->size(); ++i) {
+            groups[g].push_back(idx++);
+        }
+    }
+    if (groups.size() < 2) {
+        return;
+    }
+    const char* sg        = std::getenv("ACE_SPEC_GENERATIONS");
+    params.maxGenerations = sg ? std::strtoul(sg, nullptr, 10) : 60;
+    params.maxTime        = poly::nullopt;
+    for (const auto& [name, members] : groups) {
+        if (members.size() < 4) {
+            continue;
+        }
+        std::vector<Input> sub;
+        sub.reserve(members.size());
+        for (auto m : members) {
+            sub.push_back(InputRef(const_cast<ZL_Input*>(flattened[m].get())));
+        }
+        AutomatedCompressorExplorer spec(sub, params);
+        spec.run();
+        fprintf(stderr,
+                "ACE_SPEC graph=%zu group=%s inputs=%zu best=%.0f\n",
+                graphIdx,
+                name.c_str(),
+                sub.size(),
+                (double)spec.solution()[0].second[0]);
+        ace.loadPopulation(spec.savePopulation(10));
+    }
+}
+
 /// @returns The compressor produced by applying @p mutations in order.
 Compressor applyMutations(
         const std::function<Compressor()>& makeCompressor,
@@ -710,6 +762,18 @@ std::vector<SerializedCompressorInternal> ACETrainer::train(
         }
         if (!skipTraining_) {
             runTraining(ace, graphIdx, numGraphs);
+            if (std::getenv("ACE_SPECIALISTS") != nullptr) {
+                addSpecialists(
+                        ace,
+                        samples[backendGraph],
+                        flattened,
+                        aceParameters(
+                                trainParams,
+                                formatVersion,
+                                compressionLevel,
+                                poly::nullopt),
+                        graphIdx);
+            }
         }
 
         // Every candidate for a graph shares that graph's ACE state

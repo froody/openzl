@@ -62,6 +62,7 @@ std::map<std::string, std::vector<MultiInput>> collectInputStreams(
         for (const auto& [name, samples] : hooks.getInputs()) {
             for (auto& sample : samples) {
                 result[name].push_back(sample);
+                result[name].back().setGroup(mi.group());
             }
         }
 
